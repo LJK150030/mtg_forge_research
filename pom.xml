@@ -16,66 +16,79 @@
     </properties>
 
     <dependencies>
-        <!-- Forge Dependencies -->
+        <!-- Forge Dependencies - Using system scope for local JARs -->
         <dependency>
             <groupId>forge</groupId>
             <artifactId>forge-core</artifactId>
             <version>2.0.05-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/third-party/forge/forge-core/target/forge-core-2.0.05-SNAPSHOT.jar</systemPath>
         </dependency>
 
         <dependency>
             <groupId>forge</groupId>
             <artifactId>forge-game</artifactId>
             <version>2.0.05-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/third-party/forge/forge-game/target/forge-game-2.0.05-SNAPSHOT.jar</systemPath>
         </dependency>
 
-        <!-- Google Guava - Required by Forge -->
+        <!-- ONLY include dependencies that can be downloaded from Maven Central -->
+
+        <!-- Google Guava - ESSENTIAL to fix your ClassNotFoundException -->
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>33.3.1-android</version>
+            <version>28.2-jre</version>
         </dependency>
 
-        <!-- Apache Commons Lang3 - Required by Forge -->
+        <!-- Apache Commons Lang3 -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
-            <version>3.17.0</version>
+            <version>3.14.0</version>
         </dependency>
 
-        <!-- Apache Commons Text - Required by Forge -->
+        <!-- Apache Commons Text -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-text</artifactId>
-            <version>1.12.0</version>
+            <version>1.8</version>
         </dependency>
 
-        <!-- MinLog - Required by Forge Game -->
+        <!-- MinLog -->
         <dependency>
             <groupId>com.googlecode</groupId>
             <artifactId>minlog</artifactId>
             <version>1.2</version>
         </dependency>
 
-        <!-- JGraphT - Required by Forge Game -->
+        <!-- JGraphT -->
         <dependency>
             <groupId>org.jgrapht</groupId>
             <artifactId>jgrapht-core</artifactId>
-            <version>1.5.2</version>
+            <version>1.5.1</version>
         </dependency>
 
-        <!-- RSS Reader - Required by Forge Core -->
+        <!-- Commons IO -->
         <dependency>
-            <groupId>com.apptasticsoftware</groupId>
-            <artifactId>rssreader</artifactId>
-            <version>3.8.2</version>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.8.0</version>
         </dependency>
 
-        <!-- Sentry Logback - Required by Forge Game -->
+        <!-- SLF4J API -->
         <dependency>
-            <groupId>io.sentry</groupId>
-            <artifactId>sentry-logback</artifactId>
-            <version>7.15.0</version>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.30</version>
+        </dependency>
+
+        <!-- Logback Classic -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.2.12</version>
         </dependency>
     </dependencies>
 
@@ -84,10 +97,22 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.8.0</version>
                 <configuration>
                     <source>11</source>
                     <target>11</target>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Exec Plugin for running with proper classpath -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.0.0</version>
+                <configuration>
+                    <mainClass>com.example.research.ForgeTest</mainClass>
+                    <commandlineArgs>-cp "${project.build.outputDirectory}${path.separator}${project.basedir}/third-party/forge/forge-core/target/forge-core-2.0.05-SNAPSHOT.jar${path.separator}${project.basedir}/third-party/forge/forge-game/target/forge-game-2.0.05-SNAPSHOT.jar"</commandlineArgs>
+                    <classpathScope>compile</classpathScope>
                 </configuration>
             </plugin>
         </plugins>
