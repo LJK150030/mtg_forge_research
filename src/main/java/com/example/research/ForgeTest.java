@@ -71,118 +71,10 @@ public class ForgeTest {
      * Create comprehensive localization with ALL required keys
      */
     private static void setupComprehensiveLocalization() {
-        System.out.println("🌐 Setting up comprehensive localization...");
-
-        try {
-            File langDir = new File("res/languages");
-            langDir.mkdirs();
-
-            File enUSProps = new File(langDir, "en-US.properties");
-
-            try (PrintWriter writer = new PrintWriter(enUSProps)) {
-                writer.println("# Comprehensive English localization for Forge");
-
-                // Basic labels
-                writer.println("lblPlayer=Player");
-                writer.println("lblDeck=Deck");
-                writer.println("lblCard=Card");
-                writer.println("lblGame=Game");
-                writer.println("lblMatch=Match");
-                writer.println("lblLife=Life");
-                writer.println("lblHand=Hand");
-                writer.println("lblLibrary=Library");
-                writer.println("lblBattlefield=Battlefield");
-                writer.println("lblGraveyard=Graveyard");
-
-                // Game types
-                writer.println("lblConstructed=Constructed");
-                writer.println("lblLimited=Limited");
-                writer.println("lblSealed=Sealed");
-                writer.println("lblDraft=Draft");
-                writer.println("lblWinston=Winston");
-                writer.println("lblGauntlet=Gauntlet");
-                writer.println("lblTournament=Tournament");
-                writer.println("lblCommander=Commander");
-                writer.println("lblCommanderGauntlet=Commander Gauntlet");
-                writer.println("lblCommanderDesc=Multiplayer format with 100-card singleton decks");
-                writer.println("lblQuest=Quest");
-                writer.println("lblQuestDraft=Quest Draft");
-                writer.println("lblPlanarConquest=Planar Conquest");
-                writer.println("lblAdventure=Adventure");
-                writer.println("lblPuzzle=Puzzle");
-                writer.println("lblPuzzleDesc=Solve Magic puzzles");
-                writer.println("lblDeckManager=Deck Manager");
-                writer.println("lblVanguard=Vanguard");
-                writer.println("lblVanguardDesc=Play with special Vanguard cards");
-                writer.println("lblOathbreaker=Oathbreaker");
-                writer.println("lblOathbreakerDesc=60-card singleton format with planeswalker commanders");
-                writer.println("lblTinyLeaders=Tiny Leaders");
-                writer.println("lblTinyLeadersDesc=50-card format with converted mana cost 3 or less");
-                writer.println("lblBrawl=Brawl");
-                writer.println("lblBrawlDesc=60-card singleton format with legendary commanders");
-                writer.println("lblPlaneswalker=Planeswalker");
-                writer.println("lblPlaneswalkerDesc=Format featuring planeswalker cards");
-                writer.println("lblPlanechase=Planechase");
-                writer.println("lblPlanechaseDesc=Multiplayer format with planar cards");
-                writer.println("lblArchenemy=Archenemy");
-                writer.println("lblArchenemyDesc=One vs many multiplayer format");
-                writer.println("lblArchenemyRumble=Archenemy Rumble");
-                writer.println("lblArchenemyRumbleDesc=Free-for-all Archenemy variant");
-                writer.println("lblMomirBasic=Momir Basic");
-                writer.println("lblMomirBasicDesc=Format using Momir Vig avatar");
-                writer.println("lblMoJhoSto=MoJhoSto Basic");
-                writer.println("lblMoJhoStoDesc=Format using multiple avatars");
-
-                // Zone types
-                writer.println("lblHandZone=Hand");
-                writer.println("lblLibraryZone=Library");
-                writer.println("lblGraveyardZone=Graveyard");
-                writer.println("lblBattlefieldZone=Battlefield");
-                writer.println("lblExileZone=Exile");
-                writer.println("lblFlashbackZone=Flashback");
-                writer.println("lblCommandZone=Command");
-                writer.println("lblStackZone=Stack");
-                writer.println("lblSideboardZone=Sideboard");
-                writer.println("lblAnteZone=Ante");
-                writer.println("lblSchemeDeckZone=Scheme Deck");
-                writer.println("lblPlanarDeckZone=Planar Deck");
-                writer.println("lblAttractionDeckZone=Attraction Deck");
-                writer.println("lblJunkyardZone=Junkyard");
-                writer.println("lblContraptionDeckZone=Contraption Deck");
-                writer.println("lblSubgameZone=Subgame");
-                writer.println("lblNoneZone=None");
-
-                // Additional common labels
-                writer.println("lblPhase=Phase");
-                writer.println("lblTurn=Turn");
-                writer.println("lblStep=Step");
-                writer.println("lblMana=Mana");
-                writer.println("lblLand=Land");
-                writer.println("lblCreature=Creature");
-                writer.println("lblSpell=Spell");
-                writer.println("lblArtifact=Artifact");
-                writer.println("lblEnchantment=Enchantment");
-                writer.println("lblInstant=Instant");
-                writer.println("lblSorcery=Sorcery");
-            }
-
-            System.out.println("  ✓ Created comprehensive localization file");
-
-            // Initialize Forge localizer
-            Localizer localizer = Localizer.getInstance();
-            localizer.initialize("en-US", langDir.getAbsolutePath());
-
-            System.out.println("✓ Comprehensive localization initialized");
-
-        } catch (Exception e) {
-            System.out.println("⚠️  Localization setup failed: " + e.getMessage());
-            try {
-                Localizer.getInstance().setEnglish(true);
-                System.out.println("  ✓ Fallback to English mode");
-            } catch (Exception ex) {
-                System.out.println("  ⚠️  Even fallback failed: " + ex.getMessage());
-            }
-        }
+        System.out.println("🌐 Loading Forge’s built-in English translations…");
+        // Point at the folder where you just dropped all of Forge’s own languages/
+        Localizer.getInstance().initialize("en-US", "res/languages");
+        System.out.println("✓ Built-in localization initialized");
     }
 
     /**
@@ -273,9 +165,9 @@ public class ForgeTest {
      */
     private static void initializeForgeData() {
         try {
-            String cardDataDir = "res/cardsfolder";
-            String editionFolder = "res/editions";
-            String blockDataFolder = "res/blockdata";
+            String cardDataDir = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\cardsfolder";
+            String editionFolder = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\editions";
+            String blockDataFolder = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\blockdata";
 
             CardStorageReader cardReader = new CardStorageReader(cardDataDir, null, false);
 
@@ -283,7 +175,7 @@ public class ForgeTest {
                     cardReader,
                     null, // customCardReader
                     editionFolder,
-                    "", // custom editions folder
+                    "TUTORIAL.txt", // custom editions folder
                     blockDataFolder,
                     "LATEST_ART_ALL_EDITIONS",
                     true, // enable unknown cards
@@ -347,7 +239,7 @@ public class ForgeTest {
 
             // Use Match's startGame() method instead of game.getAction().startGame()
             System.out.println("🚀 Starting game...");
-            match.startGame(game);
+            match.startGame(game, null);
 
             System.out.println("🎉 Game started successfully!");
             System.out.println("📊 Game State:");
@@ -422,8 +314,7 @@ public class ForgeTest {
             // Create and set the controller using the proper constructor
             MinimalPlayerController controller = new MinimalPlayerController(game, player, this);
 
-            // Use reflection or a different approach since setController doesn't exist
-            // Instead, we'll return the player and let the game handle controller assignment
+            player.dangerouslySetController(controller);
             return player;
         }
 
