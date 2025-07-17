@@ -32,6 +32,7 @@ import forge.util.collect.FCollectionView;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
+
 import java.io.*;
 import java.util.*;
 import java.util.function.Predicate;
@@ -165,17 +166,42 @@ public class ForgeTest {
      */
     private static void initializeForgeData() {
         try {
-            String cardDataDir = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\cardsfolder";
-            String editionFolder = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\editions";
-            String blockDataFolder = "C:\\Users\\38977332\\Documents\\Repo\\small_projects\\mtg_forge\\res\\blockdata";
+            // Set up cache directory first
+            System.setProperty("forge.cache.dir", "cache");
+            new File("cache").mkdirs();
+            new File("cache/pics").mkdirs();
+            new File("cache/pics/cards").mkdirs();
 
+            // Initialize essential Forge settings
+            try {
+                // Try to initialize ImageKeys if the class exists and has the method
+                Class<?> imageKeysClass = Class.forName("forge.ImageKeys");
+                if (imageKeysClass != null) {
+                    try {
+                        java.lang.reflect.Method initMethod = imageKeysClass.getMethod("initializeCache");
+                        initMethod.invoke(null);
+                        System.out.println("✓ ImageKeys cache initialized");
+                    } catch (Exception e) {
+                        System.out.println("⚠️  ImageKeys initialization skipped: " + e.getMessage());
+                    }
+                }
+            } catch (ClassNotFoundException e) {
+                System.out.println("⚠️  ImageKeys class not found, skipping cache initialization");
+            }
+
+            // Use your downloaded cards directory
+            String cardDataDir     = "D:\\my_files\\cards";
+            String editionFolder   = "res/editions";
+            String blockDataFolder = "res/blockdata";
+
+            // Create a CardStorageReader that can handle the set-based folder structure
             CardStorageReader cardReader = new CardStorageReader(cardDataDir, null, false);
 
             StaticData staticData = new StaticData(
                     cardReader,
                     null, // customCardReader
                     editionFolder,
-                    "TUTORIAL.txt", // custom editions folder
+                    editionFolder, // Let it use default editions
                     blockDataFolder,
                     "LATEST_ART_ALL_EDITIONS",
                     true, // enable unknown cards
@@ -186,6 +212,7 @@ public class ForgeTest {
 
         } catch (Exception e) {
             System.err.println("⚠️  StaticData initialization failed: " + e.getMessage());
+            e.printStackTrace();
             System.out.println("   Continuing with empty decks...");
         }
     }

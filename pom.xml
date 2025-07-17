@@ -33,6 +33,15 @@
             <systemPath>${project.basedir}/third-party/forge/forge-game/target/forge-game-2.0.05-SNAPSHOT.jar</systemPath>
         </dependency>
 
+        <dependency>
+            <groupId>forge</groupId>
+            <artifactId>forge-gui-desktop</artifactId>
+            <version>2.0.05-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/third-party/forge/forge-gui-desktop/target/forge-gui-desktop-2.0.05-SNAPSHOT.jar</systemPath>
+        </dependency>
+
+
         <!-- ONLY include dependencies that can be downloaded from Maven Central -->
 
         <!-- Google Guava - ESSENTIAL to fix your ClassNotFoundException -->
