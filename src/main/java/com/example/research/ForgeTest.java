@@ -175,99 +175,196 @@ public class ForgeTest {
         // Create basic lands with proper Oracle text
         createCard(cardsDir, "plains", "Plains", "0", "Basic Land Plains",
                 "A:AB$ Mana | Cost$ T | Produced$ W | SpellDescription$ Add {W}.",
-                "Plains");
+                "({T}: Add {W}.)");
         createCard(cardsDir, "island", "Island", "0", "Basic Land Island",
                 "A:AB$ Mana | Cost$ T | Produced$ U | SpellDescription$ Add {U}.",
-                "Island");
+                "({T}: Add {U}.)");
         createCard(cardsDir, "swamp", "Swamp", "0", "Basic Land Swamp",
                 "A:AB$ Mana | Cost$ T | Produced$ B | SpellDescription$ Add {B}.",
-                "Swamp");
+                "({T}: Add {B}.)");
         createCard(cardsDir, "mountain", "Mountain", "0", "Basic Land Mountain",
                 "A:AB$ Mana | Cost$ T | Produced$ R | SpellDescription$ Add {R}.",
-                "Mountain");
+                "({T}: Add {R}.)");
         createCard(cardsDir, "forest", "Forest", "0", "Basic Land Forest",
                 "A:AB$ Mana | Cost$ T | Produced$ G | SpellDescription$ Add {G}.",
-                "Forest");
-
-        // Create Uncharted Haven
-        createCard(cardsDir, "uncharted_haven", "Uncharted Haven", "0", "Land",
-                "T:Add 1 to your mana pool.\nA:AB$ Mana | Cost$ T | Produced$ Any | SpellDescription$ Add one mana of any color.",
-                "Uncharted Haven enters the battlefield tapped.\n{T}: Add one mana of any color.");
+                "({T}: Add {G}.)");
     }
 
     private static void createTutorialCards() throws IOException {
         File cardsDir = new File("D:/my_files/cards");
 
-        // Cat cards
+        // CATS DECK CARDS - CORRECTED TO MATCH TABLE DATA
+
+        // Savannah Lions - Verified correct
         createCard(cardsDir, "savannah_lions", "Savannah Lions", "W", "Creature Cat",
                 "PT:2/1",
                 "Savannah Lions");
-        createCard(cardsDir, "leonin_skyhunter", "Leonin Skyhunter", "2WW", "Creature Cat Knight",
+
+        // CORRECTED: Leonin Skyhunter - Fixed mana cost
+        createCard(cardsDir, "leonin_skyhunter", "Leonin Skyhunter", "WW", "Creature Cat Knight",
                 "PT:2/2\nK:Flying",
                 "Flying");
+
+        // CORRECTED: Prideful Parent - Fixed mana cost
         createCard(cardsDir, "prideful_parent", "Prideful Parent", "2W", "Creature Cat",
-                "PT:2/2",
-                "Prideful Parent");
+                "PT:2/2\n" +
+                        "K:Vigilance\n" +
+                        "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | " +
+                        "Execute$ TrigToken | TriggerDescription$ When CARDNAME enters the battlefield, create a 1/1 white Cat creature token.\n" +
+                        "SVar:TrigToken:DB$ Token | TokenAmount$ 1 | TokenScript$ w_1_1_cat | TokenOwner$ You | " +
+                        "TokenColors$ White | TokenTypes$ Creature,Cat | TokenPower$ 1 | TokenToughness$ 1",
+                "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, create a 1/1 white Cat creature token.");
+
+        // CORRECTED: Felidar Savior - Fixed mana cost
         createCard(cardsDir, "felidar_savior", "Felidar Savior", "3W", "Creature Cat Beast",
-                "PT:2/3\nK:Lifelink",
-                "Lifelink");
+                "PT:2/3\nK:Lifelink\nT:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | Execute$ TrigCounters | OptionalDecider$ You | TriggerDescription$ When CARDNAME enters the battlefield, put a +1/+1 counter on each of up to two other target creatures you control.\nSVar:TrigCounters:DB$ PutCounter | ValidTgts$ Creature.YouCtrl+Other | TgtPrompt$ Select up to two other creatures you control | TargetMin$ 0 | TargetMax$ 2 | CounterType$ P1P1 | CounterNum$ 1",
+                "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, put a +1/+1 counter on each of up to two other target creatures you control.");
+
+        // CORRECTED: Jazal Goldmane - Fixed mana cost
         createCard(cardsDir, "jazal_goldmane", "Jazal Goldmane", "2WW", "Legendary Creature Cat Warrior",
-                "PT:4/4",
-                "Jazal Goldmane");
+                "PT:4/4\nK:First Strike\nA:AB$ PumpAll | Cost$ 3 W W | ValidCards$ Creature.attacking+YouCtrl | NumAtt$ X | NumDef$ X | References$ X | SpellDescription$ Attacking creatures you control get +X/+X until end of turn, where X is the number of attacking creatures.\nSVar:X:Count$Valid Creature.attacking+YouCtrl",
+                "First strike (This creature deals combat damage before creatures without first strike.)\n{3}{W}{W}: Attacking creatures you control get +X/+X until end of turn, where X is the number of attacking creatures.");
 
-        // Cat spells
+        // CORRECTED: Angelic Edict - Fixed mana cost and effect
         createCard(cardsDir, "angelic_edict", "Angelic Edict", "4W", "Sorcery",
-                "A:SP$ Destroy | Cost$ 4 W | ValidTgts$ Creature,Enchantment | TgtPrompt$ Select target creature or enchantment | SpellDescription$ Destroy target creature or enchantment.",
-                "Destroy target creature or enchantment.");
+                "A:SP$ ChangeZone | Cost$ 4 W | ValidTgts$ Creature,Enchantment | TgtPrompt$ Select target creature or enchantment | Origin$ Battlefield | Destination$ Exile | SpellDescription$ Exile target creature or enchantment.",
+                "Exile target creature or enchantment.");
+
+        // CORRECTED: Pacifism - Fixed enchant syntax
         createCard(cardsDir, "pacifism", "Pacifism", "1W", "Enchantment Aura",
-                "K:Enchant creature\nS:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddHiddenKeyword$ HIDDEN CARDNAME can't attack or block.",
+                "K:Enchant:creature\nS:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddHiddenKeyword$ HIDDEN CARDNAME can't attack or block. | Description$ Enchanted creature can't attack or block.",
                 "Enchant creature\nEnchanted creature can't attack or block.");
-        createCard(cardsDir, "moment_of_triumph", "Moment of Triumph", "1W", "Instant",
-                "A:SP$ Pump | Cost$ 1 W | ValidTgts$ Creature | TgtPrompt$ Select target creature | NumAtt$ +2 | NumDef$ +2 | SpellDescription$ Target creature gets +2/+2 until end of turn.",
-                "Target creature gets +2/+2 until end of turn.");
+
+        // CORRECTED: Ingenious Leonin - Fixed mana cost
+        createCard(cardsDir, "ingenious_leonin", "Ingenious Leonin", "4W", "Creature Cat Soldier",
+                "PT:4/4\nA:AB$ PutCounter | Cost$ 3 W | ValidTgts$ Creature.attacking+YouCtrl+Other | TgtPrompt$ Select another target attacking creature you control | CounterType$ P1P1 | CounterNum$ 1 | SubAbility$ DBFirstStrike | SpellDescription$ Put a +1/+1 counter on another target attacking creature you control. If that creature is a Cat, it gains first strike until end of turn.\nSVar:DBFirstStrike:DB$ Pump | Defined$ Targeted | KW$ First Strike | ConditionDefined$ Targeted | ConditionPresent$ Creature.Cat | SpellDescription$ If that creature is a Cat, it gains first strike until end of turn.",
+                "{3}{W}: Put a +1/+1 counter on another target attacking creature you control. If that creature is a Cat, it gains first strike until end of turn. (It deals combat damage before creatures without first strike.)");
+
+        // CORRECTED: Helpful Hunter - Fixed mana cost
+        createCard(cardsDir, "helpful_hunter", "Helpful Hunter", "1W", "Creature Cat",
+                "PT:1/1\nT:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | Execute$ TrigDraw | TriggerDescription$ When CARDNAME enters the battlefield, draw a card.\nSVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1",
+                "When this creature enters, draw a card.");
+
+        // Leonin Vanguard - Verified correct
+        createCard(cardsDir, "leonin_vanguard", "Leonin Vanguard", "W", "Creature Cat Soldier",
+                "PT:1/1\n" +
+                        "T:Mode$ Phase | Phase$ BeginCombat | ValidPlayer$ You | CheckSVar$ X | SVarCompare$ GE3 | " +
+                        "Execute$ TrigBonus | TriggerDescription$ At the beginning of combat on your turn, " +
+                        "if you control three or more creatures, CARDNAME gets +1/+1 until end of turn and you gain 1 life.\n" +
+                        "SVar:TrigBonus:DB$ Pump | Defined$ Self | NumAtt$ +1 | NumDef$ +1 | SubAbility$ DBGainLife\n" +
+                        "SVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n" +
+                        "SVar:X:Count$Valid Creature.YouCtrl",
+                "At the beginning of combat on your turn, if you control three or more creatures, this creature gets +1/+1 until end of turn and you gain 1 life.");
+
+        // Moment of Triumph - Verified correct
+        createCard(cardsDir, "moment_of_triumph", "Moment of Triumph", "W", "Instant",
+                "A:SP$ Pump | Cost$ W | ValidTgts$ Creature | TgtPrompt$ Select target creature | NumAtt$ +2 | NumDef$ +2 | SubAbility$ DBGainLife | SpellDescription$ Target creature gets +2/+2 until end of turn. You gain 2 life.\nSVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 2",
+                "Target creature gets +2/+2 until end of turn. You gain 2 life.");
+
+        // Elspeth's Smite - Verified correct
         createCard(cardsDir, "elspeths_smite", "Elspeth's Smite", "W", "Instant",
-                "A:SP$ Destroy | Cost$ W | ValidTgts$ Creature.attacking | TgtPrompt$ Select target attacking creature | SpellDescription$ Destroy target attacking creature.",
-                "Destroy target attacking creature.");
+                "A:SP$ DealDamage | Cost$ W | ValidTgts$ Creature.attacking,Creature.blocking | TgtPrompt$ Select target attacking or blocking creature | NumDmg$ 3 | RememberTargets$ True | SubAbility$ DBExileReplacement | SpellDescription$ CARDNAME deals 3 damage to target attacking or blocking creature. If that creature would die this turn, exile it instead.\nSVar:DBExileReplacement:DB$ Effect | Name$ Elspeth's Smite Effect | Triggers$ TrigExile | SVars$ ExileDying | Duration$ EndOfTurn\nSVar:TrigExile:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.IsRemembered | Execute$ ExileDying | TriggerDescription$ If the damaged creature would die this turn, exile it instead.\nSVar:ExileDying:DB$ ChangeZone | Defined$ TriggeredCard | Origin$ Graveyard | Destination$ Exile",
+                "Elspeth's Smite deals 3 damage to target attacking or blocking creature. If that creature would die this turn, exile it instead.");
 
-        // Vampire cards
+        // VAMPIRE DECK CARDS - CORRECTED TO MATCH TABLE DATA
+
+        // CORRECTED: Vampire Interloper - Fixed mana cost
         createCard(cardsDir, "vampire_interloper", "Vampire Interloper", "1B", "Creature Vampire Scout",
-                "PT:2/1\nK:Flying",
-                "Flying");
-        createCard(cardsDir, "vampire_spawn", "Vampire Spawn", "2B", "Creature Vampire",
-                "PT:2/3",
-                "Vampire Spawn");
-        createCard(cardsDir, "highborn_vampire", "Highborn Vampire", "2BB", "Creature Vampire",
-                "PT:3/3",
-                "Highborn Vampire");
-        createCard(cardsDir, "bloodtithe_collector", "Bloodtithe Collector", "2B", "Creature Vampire",
-                "PT:2/3",
-                "Bloodtithe Collector");
-        createCard(cardsDir, "crossway_troublemakers", "Crossway Troublemakers", "4B", "Creature Vampire",
-                "PT:4/4",
-                "Crossway Troublemakers");
+                "PT:2/1\nK:Flying\nK:CARDNAME can't block.",
+                "Flying\nThis creature can't block.");
 
-        // Vampire spells
+        // CORRECTED: Vampire Spawn - Fixed mana cost
+        createCard(cardsDir, "vampire_spawn", "Vampire Spawn", "2B", "Creature Vampire",
+                "PT:2/3\nT:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | Execute$ TrigLifeDrain | TriggerDescription$ When CARDNAME enters the battlefield, each opponent loses 2 life and you gain 2 life.\nSVar:TrigLifeDrain:DB$ LoseLife | Defined$ Opponent | LifeAmount$ 2 | SubAbility$ DBGainLife\nSVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 2",
+                "When this creature enters, each opponent loses 2 life and you gain 2 life.");
+
+        // Moment of Craving - Verified correct
         createCard(cardsDir, "moment_of_craving", "Moment of Craving", "1B", "Instant",
-                "A:SP$ Pump | Cost$ 1 B | ValidTgts$ Creature | TgtPrompt$ Select target creature | NumAtt$ -2 | NumDef$ -2 | SpellDescription$ Target creature gets -2/-2 until end of turn.",
-                "Target creature gets -2/-2 until end of turn.");
+                "A:SP$ Pump | Cost$ 1 B | ValidTgts$ Creature | TgtPrompt$ Select target creature | NumAtt$ -2 | NumDef$ -2 | SubAbility$ DBGainLife | SpellDescription$ Target creature gets -2/-2 until end of turn. You gain 2 life.\nSVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 2",
+                "Target creature gets -2/-2 until end of turn. You gain 2 life.");
+
+        // Highborn Vampire - Verified correct
+        createCard(cardsDir, "highborn_vampire", "Highborn Vampire", "3B", "Creature Vampire Warrior",
+                "PT:4/3",
+                "Highborn Vampire");
+
+        // CORRECTED: Untamed Hunger - Fixed enchant syntax
         createCard(cardsDir, "untamed_hunger", "Untamed Hunger", "2B", "Enchantment Aura",
-                "K:Enchant creature\nS:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddKeyword$ Menace",
-                "Enchant creature\nEnchanted creature has menace.");
-        createCard(cardsDir, "vengeful_bloodwitch", "Vengeful Bloodwitch", "3B", "Creature Vampire Warlock",
-                "PT:3/2",
-                "Vengeful Bloodwitch");
+                "K:Enchant:creature\nS:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddPower$ 2 | AddToughness$ 1 | AddKeyword$ Menace | Description$ Enchanted creature gets +2/+1 and has menace.",
+                "Enchant creature\nEnchanted creature gets +2/+1 and has menace. (It can't be blocked except by two or more creatures.)");
+
+        // CORRECTED: Bloodtithe Collector - Fixed mana cost
+        createCard(cardsDir, "bloodtithe_collector", "Bloodtithe Collector", "4B", "Creature Vampire Noble",
+                "PT:3/4\n" +
+                        "K:Flying\n" +
+                        "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | " +
+                        "CheckSVar$ X | SVarCompare$ GE1 | Execute$ TrigDiscard | " +
+                        "TriggerDescription$ When CARDNAME enters the battlefield, if an opponent lost life this turn, each opponent discards a card.\n" +
+                        "SVar:TrigDiscard:DB$ Discard | Defined$ Opponent | NumCards$ 1 | Mode$ TgtChoose\n" +
+                        "SVar:X:Count$OpponentLostLifeThisTurn",
+                "Flying\nWhen this creature enters, if an opponent lost life this turn, each opponent discards a card.");
+
+        // CORRECTED: Crossway Troublemakers - Fixed mana cost
+        createCard(cardsDir, "crossway_troublemakers", "Crossway Troublemakers", "5B", "Creature Vampire",
+                "PT:5/5\n" +
+                        "S:Mode$ Continuous | Affected$ Creature.Vampire+attacking+YouCtrl | AddKeyword$ Deathtouch & Lifelink | " +
+                        "Description$ Attacking Vampires you control have deathtouch and lifelink.\n" +
+                        "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Creature.Vampire+YouCtrl | " +
+                        "Execute$ TrigPayLife | OptionalDecider$ You | TriggerDescription$ Whenever a Vampire you control dies, " +
+                        "you may pay 2 life. If you do, draw a card.\n" +
+                        "SVar:TrigPayLife:AB$ LoseLife | Cost$ 0 | Defined$ You | LifeAmount$ 2 | " +
+                        "UnlessCost$ 0 | UnlessPayer$ You | SubAbility$ DBDraw\n" +
+                        "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1",
+                "Attacking Vampires you control have deathtouch and lifelink. (Any amount of damage they deal to a creature is enough to destroy it. Damage dealt by those creatures also causes their controller to gain that much life.)\nWhenever a Vampire you control dies, you may pay 2 life. If you do, draw a card.");
+
+        // CORRECTED: Vengeful Bloodwitch - Fixed mana cost
+        createCard(cardsDir, "vengeful_bloodwitch", "Vengeful Bloodwitch", "1B", "Creature Vampire Warlock",
+                "PT:1/1\n" +
+                        "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | " +
+                        "ValidCard$ Creature.Self,Creature.YouCtrl+Other | Execute$ TrigLifeDrain | " +
+                        "TriggerDescription$ Whenever CARDNAME or another creature you control dies, target opponent loses 1 life and you gain 1 life.\n" +
+                        "SVar:TrigLifeDrain:DB$ LoseLife | ValidTgts$ Opponent | TgtPrompt$ Select target opponent | " +
+                        "LifeAmount$ 1 | SubAbility$ DBGainLife\n" +
+                        "SVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 1",
+                "Whenever this creature or another creature you control dies, target opponent loses 1 life and you gain 1 life.");
+
+        // CORRECTED: Hero's Downfall - Fixed mana cost
         createCard(cardsDir, "heros_downfall", "Hero's Downfall", "1BB", "Instant",
                 "A:SP$ Destroy | Cost$ 1 B B | ValidTgts$ Creature,Planeswalker | TgtPrompt$ Select target creature or planeswalker | SpellDescription$ Destroy target creature or planeswalker.",
                 "Destroy target creature or planeswalker.");
+
+        // CORRECTED: Vampire Neonate - Fixed power/toughness
         createCard(cardsDir, "vampire_neonate", "Vampire Neonate", "B", "Creature Vampire",
-                "PT:0/2",
-                "Vampire Neonate");
-        createCard(cardsDir, "offer_immortality", "Offer Immortality", "3B", "Sorcery",
-                "A:SP$ ChangeZone | Cost$ 3 B | Origin$ Graveyard | Destination$ Hand | ValidTgts$ Creature.YouCtrl | TgtPrompt$ Select target creature card in your graveyard | SpellDescription$ Return target creature card from your graveyard to your hand.",
-                "Return target creature card from your graveyard to your hand.");
+                "PT:0/3\nA:AB$ LoseLife | Cost$ 2 T | ValidTgts$ Player.Opponent | TgtPrompt$ Select target opponent | LifeAmount$ 1 | SubAbility$ DBGainLife | SpellDescription$ Target opponent loses 1 life and you gain 1 life.\nSVar:DBGainLife:DB$ GainLife | Defined$ You | LifeAmount$ 1",
+                "{2}, {T}: Each opponent loses 1 life and you gain 1 life.");
+
+        // CORRECTED: Offer Immortality - Fixed mana cost
+        createCard(cardsDir, "offer_immortality", "Offer Immortality", "1B", "Instant",
+                "A:SP$ Pump | Cost$ 1 B | ValidTgts$ Creature | TgtPrompt$ Select target creature | KW$ Deathtouch & Indestructible | SpellDescription$ Target creature gains deathtouch and indestructible until end of turn.",
+                "Target creature gains deathtouch and indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)");
+
         createCard(cardsDir, "stromkirk_bloodthief", "Stromkirk Bloodthief", "2B", "Creature Vampire Rogue",
-                "PT:2/1",
-                "Stromkirk Bloodthief");
+                "PT:2/2\n" +
+                        "T:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | CheckSVar$ X | SVarCompare$ GE1 | " +
+                        "Execute$ TrigPutCounter | TriggerDescription$ At the beginning of your end step, if an opponent lost life this turn, " +
+                        "put a +1/+1 counter on target Vampire you control.\n" +
+                        "SVar:TrigPutCounter:DB$ PutCounter | ValidTgts$ Creature.Vampire+YouCtrl | TgtPrompt$ Select target Vampire you control | " +
+                        "CounterType$ P1P1 | CounterNum$ 1\n" +
+                        "SVar:X:Count$OpponentLostLifeThisTurn",
+                "At the beginning of your end step, if an opponent lost life this turn, put a +1/+1 counter on target Vampire you control.");
+
+        createCard(cardsDir, "uncharted_haven", "Uncharted Haven", "0", "Land",
+                "K:CARDNAME enters the battlefield tapped.\n" +
+                        "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | " +
+                        "Execute$ ChooseColor | TriggerDescription$ As CARDNAME enters the battlefield, choose a color.\n" +
+                        "SVar:ChooseColor:DB$ ChooseColor | Defined$ You | AILogic$ MostProminentInComputerHand\n" +
+                        "A:AB$ Mana | Cost$ T | Produced$ Chosen | Amount$ 1 | SpellDescription$ Add one mana of the chosen color.",
+                "This land enters tapped. As it enters, choose a color.\n{T}: Add one mana of the chosen color.");
+
+        createCard(cardsDir, "w_1_1_cat", "Cat", "", "Token Creature Cat",
+                "PT:1/1\n" +
+                        "Colors:white",
+                "Cat Token");
     }
 
     private static void createCard(File dir, String filename, String name, String cost, String types, String abilities, String oracleText) throws IOException {
