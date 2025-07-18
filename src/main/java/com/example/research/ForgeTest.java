@@ -1,45 +1,17 @@
 package com.example.research;
 
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimap;
 import forge.*;
-import forge.ai.AiController;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerControllerAi;
-import forge.card.ColorSet;
-import forge.card.ICardFace;
-import forge.card.mana.ManaCost;
-import forge.card.mana.ManaCostShard;
 import forge.deck.*;
 import forge.game.*;
-import forge.game.ability.ApiType;
-import forge.game.ability.effects.RollDiceEffect;
-import forge.game.combat.Combat;
-import forge.game.cost.Cost;
-import forge.game.cost.CostPart;
-import forge.game.cost.CostPartMana;
-import forge.game.keyword.Keyword;
-import forge.game.keyword.KeywordInterface;
-import forge.game.mana.Mana;
-import forge.game.mana.ManaConversionMatrix;
-import forge.game.mana.ManaCostBeingPaid;
 import forge.game.player.*;
-import forge.game.card.*;
-import forge.game.replacement.ReplacementEffect;
-import forge.game.spellability.*;
-import forge.game.staticability.StaticAbility;
-import forge.game.trigger.WrappedAbility;
-import forge.game.zone.PlayerZone;
 import forge.game.zone.ZoneType;
 import forge.item.*;
 import forge.util.*;
-import forge.util.collect.FCollectionView;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.*;
 import java.util.*;
-import java.util.function.Predicate;
 
 /**
  * Forge Test with Integrated AI Implementation
@@ -50,7 +22,7 @@ import java.util.function.Predicate;
 public class ForgeTest {
 
     public static void main(String[] args) {
-        System.out.println("🎮 Starting Forge Match Test with Integrated AI");
+        System.out.println("🎮 Starting Forge Match Test with Enhanced Simulation");
 
         try {
             // Step 1: Initialize Forge environment
@@ -62,8 +34,26 @@ public class ForgeTest {
             Deck catsDeck = createCatsDeck();
             Deck vampiresDeck = createVampiresDeck();
 
-            // Step 3: Run the match with proper AI
-            runMatch(catsDeck, vampiresDeck);
+            // Step 3: Parse command line arguments for simulation mode
+            SimulationMode mode = parseArgs(args);
+
+            // Step 4: Run the match with selected configuration
+            switch (mode) {
+                case QUICK:
+                    runQuickMatch(catsDeck, vampiresDeck);
+                    break;
+                case DETAILED:
+                    runDetailedMatch(catsDeck, vampiresDeck);
+                    break;
+                case FULL:
+                    runFullMatch(catsDeck, vampiresDeck);
+                    break;
+                case CUSTOM:
+                    runCustomMatch(catsDeck, vampiresDeck, args);
+                    break;
+                default:
+                    runMatch(catsDeck, vampiresDeck); // Default behavior
+            }
 
         } catch (Exception e) {
             System.err.println("❌ Error setting up match: " + e.getMessage());
@@ -286,13 +276,31 @@ public class ForgeTest {
             writer.println("");
             writer.println("[cards]");
             writer.println("1 C Plains");
-            writer.println("2 C Island");
-            writer.println("3 C Swamp");
-            writer.println("4 C Mountain");
-            writer.println("5 C Forest");
-            writer.println("6 C Uncharted Haven");
-            writer.println("7 C Savannah Lions");
-            writer.println("8 C Vampire Interloper");
+            writer.println("2 C Savannah Lions");
+            writer.println("3 C Leonin Skyhunter");
+            writer.println("4 C Prideful Parent");
+            writer.println("5 C Felidar Savior");
+            writer.println("6 C Angelic Edict");
+            writer.println("7 C Jazal Goldmane");
+            writer.println("8 C Pacifism");
+            writer.println("9 C Ingenious Leonin");
+            writer.println("10 C Helpful Hunter");
+            writer.println("12 C Leonin Vanguard");
+            writer.println("13 C Moment of Triumph");
+            writer.println("14 C Uncharted Haven");
+            writer.println("15 C Swamp");
+            writer.println("16 C Vampire Interloper");
+            writer.println("17 C Vampire Spawn");
+            writer.println("18 C Moment of Craving");
+            writer.println("19 C Highborn Vampire");
+            writer.println("20 C Untamed Hunger");
+            writer.println("21 C Bloodtithe Collector");
+            writer.println("22 C Crossway Troublemakers");
+            writer.println("23 C Vengeful Bloodwitch");
+            writer.println("24 C Hero's Downfall");
+            writer.println("25 C Vampire Neonate");
+            writer.println("26 C Offer Immortality");
+            writer.println("27 C Stromkirk Bloodthief");
             // Add more cards as needed
         }
     }
@@ -381,31 +389,39 @@ public class ForgeTest {
 
     private static Deck createCatsDeck() {
         Deck deck = new Deck("Cats Tutorial Deck");
-        addCardToDeck(deck, "Plains", 8);
-        addCardToDeck(deck, "Savannah Lions", 2);
-        addCardToDeck(deck, "Leonin Skyhunter", 2);
-        addCardToDeck(deck, "Prideful Parent", 2);
+        addCardToDeck(deck, "Plains", 7);
+        addCardToDeck(deck, "Savannah Lions", 1);
+        addCardToDeck(deck, "Leonin Skyhunter", 1);
+        addCardToDeck(deck, "Prideful Parent", 1);
         addCardToDeck(deck, "Felidar Savior", 1);
-        addCardToDeck(deck, "Jazal Goldmane", 1);
         addCardToDeck(deck, "Angelic Edict", 1);
+        addCardToDeck(deck, "Jazal Goldmane", 1);
         addCardToDeck(deck, "Pacifism", 1);
+        addCardToDeck(deck, "Ingenious Leonin", 1);
+        addCardToDeck(deck, "Helpful Hunter", 1);
+        addCardToDeck(deck, "Leonin Vanguard", 1);
         addCardToDeck(deck, "Moment of Triumph", 1);
         addCardToDeck(deck, "Elspeth's Smite", 1);
+        addCardToDeck(deck, "Uncharted Haven", 1);
         return deck;
     }
 
     private static Deck createVampiresDeck() {
         Deck deck = new Deck("Vampires Tutorial Deck");
-        addCardToDeck(deck, "Swamp", 8);
-        addCardToDeck(deck, "Vampire Interloper", 2);
-        addCardToDeck(deck, "Vampire Spawn", 2);
-        addCardToDeck(deck, "Moment of Craving", 2);
+        addCardToDeck(deck, "Swamp", 7);
+        addCardToDeck(deck, "Vampire Interloper", 1);
+        addCardToDeck(deck, "Vampire Spawn", 1);
+        addCardToDeck(deck, "Moment of Craving", 1);
         addCardToDeck(deck, "Highborn Vampire", 1);
         addCardToDeck(deck, "Untamed Hunger", 1);
         addCardToDeck(deck, "Bloodtithe Collector", 1);
         addCardToDeck(deck, "Crossway Troublemakers", 1);
         addCardToDeck(deck, "Vengeful Bloodwitch", 1);
         addCardToDeck(deck, "Hero's Downfall", 1);
+        addCardToDeck(deck, "Vampire Neonate", 1);
+        addCardToDeck(deck, "Offer Immortality", 1);
+        addCardToDeck(deck, "Stromkirk Bloodthief", 1);
+        addCardToDeck(deck, "Uncharted Haven", 1);
         return deck;
     }
 
@@ -436,8 +452,8 @@ public class ForgeTest {
             System.out.println("👥 Creating AI players using LobbyPlayerAi pattern...");
 
             // Use TutorialAI which extends LobbyPlayerAi
-            TutorialAI aiPlayer1 = new TutorialAI("Cats AI", true);  // aggro style
-            TutorialAI aiPlayer2 = new TutorialAI("Vampires AI", false); // control style
+            TutorialAI aiPlayer1 = new TutorialAI("Cats AI", false);  // control style
+            TutorialAI aiPlayer2 = new TutorialAI("Vampires AI", true); // aggro style
 
             System.out.println("✓ Created AI players");
 
@@ -465,7 +481,7 @@ public class ForgeTest {
                 System.out.println("🎉 AI game started successfully!");
 
                 // Run a few turns for demonstration
-                simulateTurns(game, 5);
+                runEnhancedSimulation(game, 5);
 
             } catch (Exception e) {
                 System.err.println("⚠️  Game start encountered issues: " + e.getMessage());
@@ -478,6 +494,209 @@ public class ForgeTest {
             System.err.println("❌ Error during AI match: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static void runEnhancedSimulation(Game game, int i) {
+        // Example 1: Simulate 5 turns with full verbose logging
+        System.out.println("\n🎮 Running Enhanced Simulation - Example 1: 5 Turns with Full Logging");
+
+        ForgeEnhancedSimulator.SimulationConfig config1 = new ForgeEnhancedSimulator.SimulationConfig();
+        config1.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.TURNS;
+        config1.turnsToSimulate = i;
+        config1.verboseLogging = true;
+        config1.logEvents = true;
+        config1.logPhaseChanges = true;
+        config1.logCombat = true;
+        config1.showHiddenZones = true;
+        config1.focusPlayerIndex = -1; // Show all players
+
+        ForgeEnhancedSimulator.MatchSimulator simulator1 =
+                new ForgeEnhancedSimulator.MatchSimulator(config1);
+        simulator1.simulate(game);
+
+        // Example 2: Full match with focus on player 1 (Vampires)
+        System.out.println("\n🎮 Running Enhanced Simulation - Example 2: Full Match, Focus on Vampires");
+
+        ForgeEnhancedSimulator.SimulationConfig config2 = new ForgeEnhancedSimulator.SimulationConfig();
+        config2.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.FULL_MATCH;
+        config2.verboseLogging = false; // Less verbose
+        config2.logEvents = true;
+        config2.logPhaseChanges = false; // Don't log every phase
+        config2.logCombat = true;
+        config2.showHiddenZones = true;
+        config2.focusPlayerIndex = 1; // Focus on player 2 (Vampires)
+        config2.maxTurnsBeforeTimeout = 50;
+
+        // Reset game if needed or create new game
+        Game game2 = createNewGame(); // You'd implement this
+        ForgeEnhancedSimulator.MatchSimulator simulator2 =
+                new ForgeEnhancedSimulator.MatchSimulator(config2);
+        simulator2.simulate(game2);
+
+        // Example 3: Quick 3-turn analysis with custom output
+        System.out.println("\n🎮 Running Enhanced Simulation - Example 3: Quick Analysis");
+
+        ForgeEnhancedSimulator.SimulationConfig config3 = new ForgeEnhancedSimulator.SimulationConfig();
+        config3.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.TURNS;
+        config3.turnsToSimulate = 3;
+        config3.verboseLogging = true;
+        config3.logEvents = false; // No event logging
+        config3.logPhaseChanges = true;
+        config3.showHiddenZones = false; // Don't show hands
+        config3.pauseBetweenPhases = true; // Slow down for observation
+
+        // Custom output stream for file logging
+        try (PrintStream fileOutput = new PrintStream(new FileOutputStream("match_log.txt"))) {
+            Game game3 = createNewGame();
+            ForgeEnhancedSimulator.MatchSimulator simulator3 =
+                    new ForgeEnhancedSimulator.MatchSimulator(config3, fileOutput);
+            simulator3.simulate(game3);
+            System.out.println("✓ Match log saved to match_log.txt");
+        } catch (IOException e) {
+            System.err.println("Error writing to file: " + e.getMessage());
+        }
+
+        // Example 4: Verbose turn-by-turn explanation for EVERY action
+        System.out.println("\n🎮 Running Enhanced Simulation - Example 4: Complete Turn-by-Turn Analysis");
+
+        ForgeEnhancedSimulator.SimulationConfig config4 = new ForgeEnhancedSimulator.SimulationConfig();
+        config4.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.FULL_MATCH;
+        config4.verboseLogging = true;
+        config4.logEvents = true;
+        config4.logPhaseChanges = true;
+        config4.logCombat = true;
+        config4.logManaUsage = true;
+        config4.logStackOperations = true;
+        config4.showHiddenZones = true;
+        config4.focusPlayerIndex = -1; // Show ALL players
+        config4.maxTurnsBeforeTimeout = 30;
+
+        // Enable maximum verbosity for complete action tracking
+        config4.logCardDraws = true;
+        config4.logLandPlays = true;
+        config4.logSpellsCast = true;
+        config4.logAbilityActivations = true;
+        config4.logTriggers = true;
+        config4.logStateBasedActions = true;
+        config4.logPriorityPasses = true;
+        config4.logAIDecisions = true;
+        config4.pauseBetweenActions = true;
+
+        // Create detailed formatter for comprehensive output
+        config4.detailedActionFormatter = true;
+        config4.includeTimestamps = true;
+        config4.includeStackTrace = true;
+
+        Game game4 = createNewGame();
+
+        // Custom output handler for ultra-verbose logging
+        try (PrintStream detailedLog = new PrintStream(new FileOutputStream("detailed_match_log.txt"))) {
+            ForgeEnhancedSimulator.MatchSimulator simulator4 =
+                    new ForgeEnhancedSimulator.MatchSimulator(config4, detailedLog);
+
+            // Set up event listeners for maximum detail
+            simulator4.setPreActionCallback((g, action) -> {
+                System.out.println("\n🔷 PRE-ACTION: " + action);
+                System.out.println("   Stack Size: " + game.getStack().size());
+                System.out.println("   Active Player: " + game.getPhaseHandler().getPlayerTurn().getName());
+            });
+
+            simulator4.setPostActionCallback((g, action, result) -> {
+                System.out.println("🔶 POST-ACTION: " + action + " -> " + result);
+                System.out.println("   Game State Changed: " + result.isStateChanged());
+            });
+
+            simulator4.simulate(game4);
+            System.out.println("✓ Detailed match log saved to detailed_match_log.txt");
+        } catch (IOException e) {
+            System.err.println("Error writing detailed log: " + e.getMessage());
+        }
+    }
+
+    // Helper method to create a new game (simplified)
+    private static Game createNewGame() {
+        try {
+            // Create fresh decks for the new game
+            Deck catsDeck = createCatsDeck();
+            Deck vampiresDeck = createVampiresDeck();
+
+            // Create AI players
+            TutorialAI aiPlayer1 = new TutorialAI("Cats AI", false);  // control style
+            TutorialAI aiPlayer2 = new TutorialAI("Vampires AI", true); // aggro style
+
+            // Create registered players
+            RegisteredPlayer regPlayer1 = new RegisteredPlayer(catsDeck);
+            RegisteredPlayer regPlayer2 = new RegisteredPlayer(vampiresDeck);
+
+            regPlayer1.setPlayer(aiPlayer1);
+            regPlayer2.setPlayer(aiPlayer2);
+
+            List<RegisteredPlayer> players = Arrays.asList(regPlayer1, regPlayer2);
+
+            // Create game rules
+            GameRules gameRules = new GameRules(GameType.Constructed);
+            gameRules.setGamesPerMatch(1);
+
+            // Create match
+            Match match = new Match(gameRules, players, "Tutorial Match - Simulation");
+
+            // Create and return the game
+            Game game = match.createGame();
+
+            // Important: Prepare the game before returning
+            match.startGame(game, null);
+
+            return game;
+
+        } catch (Exception e) {
+            System.err.println("❌ Error creating new game: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+// OPTIONAL: Add these utility methods for more control
+
+    // Method to run a single turn with detailed logging
+    public static void runSingleTurn(Game game, boolean verbose) {
+        ForgeEnhancedSimulator.SimulationConfig config = new ForgeEnhancedSimulator.SimulationConfig();
+        config.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.TURNS;
+        config.turnsToSimulate = 1;
+        config.verboseLogging = verbose;
+        config.logEvents = true;
+        config.logPhaseChanges = true;
+
+        ForgeEnhancedSimulator.MatchSimulator simulator =
+                new ForgeEnhancedSimulator.MatchSimulator(config);
+        simulator.simulate(game);
+    }
+
+    // Method to analyze specific player's hand and board state
+    public static void analyzePlayerState(Game game, int playerIndex) {
+        ForgeEnhancedSimulator.SimulationConfig config = new ForgeEnhancedSimulator.SimulationConfig();
+        config.focusPlayerIndex = playerIndex;
+        config.showHiddenZones = true;
+
+        ForgeEnhancedSimulator.GameStatePrinter printer =
+                new ForgeEnhancedSimulator.GameStatePrinter(config, System.out);
+        printer.printFullGameState(game);
+    }
+
+    // Method to track specific events
+    public static void trackCombatEvents(Game game, int turns) {
+        ForgeEnhancedSimulator.SimulationConfig config = new ForgeEnhancedSimulator.SimulationConfig();
+        config.mode = ForgeEnhancedSimulator.SimulationConfig.Mode.TURNS;
+        config.turnsToSimulate = turns;
+        config.verboseLogging = false;
+        config.logEvents = true;
+        config.logPhaseChanges = false;
+        config.logCombat = true; // Only log combat
+        config.logManaUsage = false;
+        config.logStackOperations = false;
+
+        ForgeEnhancedSimulator.MatchSimulator simulator =
+                new ForgeEnhancedSimulator.MatchSimulator(config);
+        simulator.simulate(game);
     }
 
     private static void simulateTurns(Game game, int numTurns) {
@@ -528,6 +747,46 @@ public class ForgeTest {
         } catch (Exception e) {
             System.err.println("❌ Error displaying game state: " + e.getMessage());
         }
+    }
+
+    // Simulation mode enum
+    private enum SimulationMode {
+        QUICK, DETAILED, FULL, CUSTOM, DEFAULT
+    }
+
+    // Parse command line arguments
+    private static SimulationMode parseArgs(String[] args) {
+        if (args.length == 0) return SimulationMode.DEFAULT;
+
+        switch (args[0].toLowerCase()) {
+            case "quick": return SimulationMode.QUICK;
+            case "detailed": return SimulationMode.DETAILED;
+            case "full": return SimulationMode.FULL;
+            case "custom": return SimulationMode.CUSTOM;
+            default: return SimulationMode.DEFAULT;
+        }
+    }
+
+    // Different match configurations
+    private static void runQuickMatch(Deck deck1, Deck deck2) {
+        System.out.println("\n🚀 Running Quick Match (3 turns, minimal logging)");
+        // Implementation here
+    }
+
+    private static void runDetailedMatch(Deck deck1, Deck deck2) {
+        System.out.println("\n🔍 Running Detailed Match (10 turns, full logging)");
+        // Implementation here
+    }
+
+    private static void runFullMatch(Deck deck1, Deck deck2) {
+        System.out.println("\n🏁 Running Full Match (until game over)");
+        // Implementation here
+    }
+
+    private static void runCustomMatch(Deck deck1, Deck deck2, String[] args) {
+        System.out.println("\n⚙️  Running Custom Match");
+        // Parse custom configuration from args
+        // Implementation here
     }
 
     // === INTEGRATED AI IMPLEMENTATION ===
