@@ -828,8 +828,8 @@ public class ForgeTest {
                 // Configure AI behavior based on deck type
                 if (isAggressive) {
                     // Aggressive AI configuration
-                    aiController.allowCheatShuffle(false);
-                    aiController.setUseSimulation(false);
+                    aiController.allowCheatShuffle(true);
+                    aiController.setUseSimulation(true);
                 } else {
                     // Control AI configuration
                     aiController.allowCheatShuffle(false);
