@@ -16,24 +16,27 @@ import java.util.*;
 import java.text.SimpleDateFormat;
 
 /**
- * Updated ForgeMatch Implementation following Forge patterns
+ * Updated ForgeMatch Implementation with GameStateTracker integration
  * This shows the key components needed to track and display each phase
  */
 public class ForgeMatch {
 
     // Configuration for simulation
     public static class SimulationConfig {
-        public int turnsToSimulate = 5;
+        public int turnsToSimulate = 100;
         public boolean verboseLogging = true;
         public boolean logPhaseChanges = true;
         public boolean pauseBetweenPhases = false;
-        public int pauseDurationMs = 500;
+        public boolean trackGameState = true;  // New option for state tracking
+        public boolean logStateToFile = true;  // Log state transitions to file
+        public String stateLogPath = "res/log/game_state_log.txt";
     }
 
     private final SimulationConfig config;
     private final PrintStream output;
     private Game game;
-    private boolean simulationRunning = false;
+    private GameStateTracker stateTracker;  // State tracker instance
+    private boolean simulationRunning = true;
 
     public ForgeMatch(SimulationConfig config, PrintStream output) {
         this.config = config;
@@ -71,28 +74,36 @@ public class ForgeMatch {
             game = match.createGame();
             output.println("✓ Game created successfully");
 
-            // Step 5: Register Event Listeners BEFORE starting
-            registerEventListeners();
+            // Step 5: Initialize GameStateTracker if enabled
+            if (config.trackGameState) {
+                stateTracker = new GameStateTracker(game, output, config.verboseLogging,
+                        config.logStateToFile, config.stateLogPath);
+                output.println("✓ Game state tracking enabled");
+                if (config.logStateToFile) {
+                    output.println("✓ State transitions will be logged to: " + config.stateLogPath);
+                }
+            }
 
-            // Step 6: Start the game
+            // Step 7: Start the game
             match.startGame(game, null);
             output.println("✓ Game started");
 
-            // Step 7: Run simulation
+            // Step 8: Run simulation
             simulateGame();
+
+            // Step 9: Close state tracker if it was created
+            if (stateTracker != null) {
+                stateTracker.close();
+            }
 
         } catch (Exception e) {
             output.println("❌ Error during match: " + e.getMessage());
             e.printStackTrace(output);
+            // Ensure cleanup happens even on error
+            if (stateTracker != null) {
+                stateTracker.close();
+            }
         }
-    }
-
-    /**
-     * Register event listeners to track phases and game events
-     */
-    private void registerEventListeners() {
-        // Phase tracking listener
-        game.subscribeToEvents(new PhaseTracker());
     }
 
     /**
@@ -195,7 +206,19 @@ public class ForgeMatch {
                     p.getCardsIn(ZoneType.Hand).size(),
                     p.getCardsIn(ZoneType.Library).size()));
         }
+
+        // If state tracking is enabled, show summary
+        if (config.trackGameState && stateTracker != null) {
+            output.println("\n📊 State Tracking Complete");
+            if (config.logStateToFile) {
+                output.println("  • Full state transition log saved to: " + config.stateLogPath);
+            }
+        }
     }
+
+    /**
+     * Phase Tracker - Logs each phase change and integrates with GameStateTracker
+     */
 
     /**
      * Phase Tracker - Logs each phase change
@@ -210,16 +233,8 @@ public class ForgeMatch {
                         ph.getPlayerTurn().getName(),
                         event.phaseDesc));
 
-                // Print current game state for this phase
-                printPhaseState();
-
-                // Pause if configured
-                if (config.pauseBetweenPhases) {
-                    try {
-                        Thread.sleep(config.pauseDurationMs);
-                    } catch (InterruptedException e) {
-                        // Ignore
-                    }
+                if (config.trackGameState && stateTracker != null) {
+                    PhaseHandler phaseHandler = game.getPhaseHandler();
                 }
             }
             return null;
