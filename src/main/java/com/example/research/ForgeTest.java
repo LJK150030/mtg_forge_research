@@ -28,7 +28,15 @@ public class ForgeTest {
             Deck vampiresDeck = deck.createVampiresDeck();
 
             // Step 3: Parse command line arguments for simulation mode
-            ForgeMatch match = new ForgeMatch(args, catsDeck, vampiresDeck);
+            ForgeMatch.SimulationConfig config = new ForgeMatch.SimulationConfig();
+            config.turnsToSimulate = 5;
+            config.verboseLogging = true;
+            config.logPhaseChanges = true;
+            config.pauseBetweenPhases = false;
+
+            // Create match runner
+            ForgeMatch match = new ForgeMatch(config, System.out);
+            match.runMatch(catsDeck, vampiresDeck);
 
         } catch (Exception e) {
             System.err.println("❌ Error setting up match: " + e.getMessage());

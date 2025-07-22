@@ -1,6 +1,5 @@
 package com.example.research;
 
-
 import forge.CardStorageReader;
 import forge.ImageKeys;
 import forge.StaticData;
@@ -10,13 +9,137 @@ import forge.util.Localizer;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
+/**
+ * Improved ForgeApp with configurable paths, better error handling,
+ * and enhanced initialization options.
+ */
 public class ForgeApp {
 
-    public ForgeApp(){
+    // Configuration constants
+    private static final String DEFAULT_LANGUAGE = "en-US";
+    private static final String CONFIG_FILE = "forge-config.properties";
+
+    // Configurable paths
+    private final String cardDataDir;
+    private final String resDir;
+    private final String cacheDir;
+    private final String languageDir;
+    private final String editionsDir;
+    private final String blockDataDir;
+
+    // Initialization options
+    private final boolean createMissingFiles;
+    private final boolean verboseLogging;
+
+    /**
+     * Default constructor using standard configuration
+     */
+    public ForgeApp() {
+        this(loadConfiguration());
+    }
+
+    /**
+     * Constructor with custom configuration
+     */
+    public ForgeApp(ForgeConfig config) {
+        this.cardDataDir = config.cardDataDir;
+        this.resDir = config.resDir;
+        this.cacheDir = config.cacheDir;
+        this.languageDir = config.languageDir;
+        this.editionsDir = config.editionsDir;
+        this.blockDataDir = config.blockDataDir;
+        this.createMissingFiles = config.createMissingFiles;
+        this.verboseLogging = config.verboseLogging;
+
         initializeForgeEnvironment();
+    }
+
+    /**
+     * Configuration class for ForgeApp
+     */
+    public static class ForgeConfig {
+        public String cardDataDir = "D:\\my_files\\cards";
+        public String resDir = "res";
+        public String cacheDir = "cache";
+        public String languageDir = "res/languages";
+        public String editionsDir = "res/editions";
+        public String blockDataDir = "res/blockdata";
+        public boolean createMissingFiles = true;
+        public boolean verboseLogging = true;
+
+        public static ForgeConfig withCustomCardDir(String cardDir) {
+            ForgeConfig config = new ForgeConfig();
+            config.cardDataDir = cardDir;
+            return config;
+        }
+
+        public static ForgeConfig silent() {
+            ForgeConfig config = new ForgeConfig();
+            config.verboseLogging = false;
+            return config;
+        }
+    }
+
+    /**
+     * Load configuration from properties file or use defaults
+     */
+    private static ForgeConfig loadConfiguration() {
+        ForgeConfig config = new ForgeConfig();
+
+        try {
+            File configFile = new File(CONFIG_FILE);
+            if (configFile.exists()) {
+                Properties props = new Properties();
+                props.load(Files.newBufferedReader(configFile.toPath()));
+
+                config.cardDataDir = props.getProperty("forge.cards.dir", config.cardDataDir);
+                config.resDir = props.getProperty("forge.res.dir", config.resDir);
+                config.cacheDir = props.getProperty("forge.cache.dir", config.cacheDir);
+                config.createMissingFiles = Boolean.parseBoolean(
+                        props.getProperty("forge.create.missing.files", "true"));
+                config.verboseLogging = Boolean.parseBoolean(
+                        props.getProperty("forge.verbose.logging", "true"));
+
+                if (config.verboseLogging) {
+                    System.out.println("✓ Loaded configuration from " + CONFIG_FILE);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("⚠️  Could not load config file, using defaults: " + e.getMessage());
+        }
+
+        return config;
+    }
+
+    /**
+     * Save current configuration to properties file
+     */
+    public void saveConfiguration() {
+        try {
+            Properties props = new Properties();
+            props.setProperty("forge.cards.dir", cardDataDir);
+            props.setProperty("forge.res.dir", resDir);
+            props.setProperty("forge.cache.dir", cacheDir);
+            props.setProperty("forge.create.missing.files", String.valueOf(createMissingFiles));
+            props.setProperty("forge.verbose.logging", String.valueOf(verboseLogging));
+
+            try (PrintWriter writer = new PrintWriter(CONFIG_FILE)) {
+                props.store(writer, "Forge Research Configuration");
+            }
+
+            if (verboseLogging) {
+                System.out.println("✓ Configuration saved to " + CONFIG_FILE);
+            }
+        } catch (IOException e) {
+            System.err.println("❌ Failed to save configuration: " + e.getMessage());
+        }
     }
 
     private void initializeForgeEnvironment() {
@@ -24,130 +147,165 @@ public class ForgeApp {
             setupForgeDirectories();
             setupLocalization();
             initializeStaticData();
-            System.out.println("✓ Forge environment initialized successfully");
+
+            log("✓ Forge environment initialized successfully");
+
         } catch (Exception e) {
             System.err.println("❌ Failed to initialize Forge environment: " + e.getMessage());
-            throw new RuntimeException(e);
+            throw new RuntimeException("Forge initialization failed", e);
         }
     }
 
     private void setupForgeDirectories() {
-        System.out.println("📁 Setting up Forge directory structure...");
+        log("📁 Setting up Forge directory structure...");
+
         try {
             String[] requiredDirs = {
-                    "res", "D:/my_files/cards", "res/editions", "res/blockdata",
-                    "res/blockdata/formats", "res/languages", "cache", "cache/pics",
-                    "cache/layouts", "cache/tokens"
+                    resDir,
+                    cardDataDir,
+                    editionsDir,
+                    blockDataDir,
+                    blockDataDir + "/formats",
+                    languageDir,
+                    cacheDir,
+                    cacheDir + "/pics",
+                    cacheDir + "/layouts",
+                    cacheDir + "/tokens"
             };
 
             for (String dir : requiredDirs) {
-                File directory = new File(dir);
-                if (!directory.exists()) {
-                    directory.mkdirs();
-                }
+                createDirectoryIfNotExists(dir);
             }
 
-            //createBasicCards();
-            //createTutorialCards();
-            //createEditionFiles();
-            //createFormatFiles();
-            createLanguageFiles();
+            if (createMissingFiles) {
+                createLanguageFiles();
+            }
 
-            System.out.println("✓ Directory structure created");
+            log("✓ Directory structure created");
+
         } catch (Exception e) {
             System.err.println("❌ Failed to create directories: " + e.getMessage());
-            throw new RuntimeException(e);
+            throw new RuntimeException("Directory setup failed", e);
+        }
+    }
+
+    private void createDirectoryIfNotExists(String dirPath) throws IOException {
+        Path path = Paths.get(dirPath);
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
+            log("  Created directory: " + dirPath);
         }
     }
 
     private void setupLocalization() {
-        System.out.println("🌐 Setting up localization...");
+        log("🌐 Setting up localization...");
+
+        // Try to initialize Localizer with graceful fallback
+        boolean localizerInitialized = false;
         try {
-            Localizer.getInstance().initialize("en-US", "res/languages");
-            System.out.println("✓ Localizer initialized successfully");
+            Localizer.getInstance().initialize(DEFAULT_LANGUAGE, languageDir);
+            log("✓ Localizer initialized successfully");
+            localizerInitialized = true;
         } catch (Exception e) {
-            System.out.println("⚠️  Localizer initialization failed, continuing with defaults: " + e.getMessage());
+            log("⚠️  Localizer initialization failed, trying fallback: " + e.getMessage());
             try {
                 Localizer.getInstance();
-                System.out.println("✓ Basic Localizer instance created");
+                log("✓ Basic Localizer instance created");
+                localizerInitialized = true;
             } catch (Exception e2) {
-                System.out.println("⚠️  Basic Localizer failed too: " + e2.getMessage());
+                log("⚠️  Basic Localizer also failed: " + e2.getMessage());
             }
         }
 
+        // Initialize Lang instance (more critical)
         try {
-            System.out.println("🔧 Initializing Lang instance...");
-            Lang.createInstance("en-US");
-            System.out.println("✓ Lang instance created successfully");
+            log("🔧 Initializing Lang instance...");
+            Lang.createInstance(DEFAULT_LANGUAGE);
+            log("✓ Lang instance created successfully");
         } catch (Exception e) {
-            System.err.println("❌ Failed to create Lang instance: " + e.getMessage());
-            throw new RuntimeException("Lang initialization failed", e);
+            if (localizerInitialized) {
+                // If Localizer worked but Lang failed, continue with warning
+                log("⚠️  Lang initialization failed but Localizer is available: " + e.getMessage());
+            } else {
+                // Both failed - this is more serious
+                System.err.println("❌ Failed to create Lang instance: " + e.getMessage());
+                throw new RuntimeException("Lang initialization failed", e);
+            }
         }
     }
 
     private void initializeStaticData() {
         try {
-            System.out.println("🖼️  Initializing ImageKeys...");
+            log("🖼️  Initializing ImageKeys...");
             initializeImageKeys();
 
-            String cardDataDir = "D:/my_files/cards";
-            String editionFolder = "res/editions";
-            String blockDataFolder = "res/blockdata";
-
+            log("📊 Initializing card storage...");
             CardStorageReader cardReader = new CardStorageReader(cardDataDir, null, false);
 
             StaticData staticData = new StaticData(
                     cardReader,
-                    null,
-                    editionFolder,
-                    editionFolder,
-                    blockDataFolder,
+                    null,  // questReader
+                    editionsDir,
+                    editionsDir,  // preconstructedDir
+                    blockDataDir,
                     "LATEST_ART_ALL_EDITIONS",
-                    true,
-                    true
+                    true,  // enablePrecons
+                    true   // enableBoosters
             );
 
-            System.out.println("✓ StaticData initialized successfully");
-            System.out.println("   Available cards: " + staticData.getCommonCards().getAllCards().size());
+            int cardCount = staticData.getCommonCards().getAllCards().size();
+            log("✓ StaticData initialized successfully");
+            log("   Available cards: " + cardCount);
+
+            if (cardCount == 0) {
+                log("⚠️  No cards found - you may need to populate the cards directory");
+            }
 
         } catch (Exception e) {
             System.err.println("❌ StaticData initialization failed: " + e.getMessage());
-            e.printStackTrace();
+            if (verboseLogging) {
+                e.printStackTrace();
+            }
             throw new RuntimeException("Failed to initialize StaticData", e);
         }
     }
 
     private void initializeImageKeys() {
         try {
+            // Create image subdirectories
             String[] imageDirs = {
-                    "cache/pics", "cache/pics/cards", "cache/pics/tokens",
-                    "cache/pics/icons", "cache/pics/boosters", "cache/pics/fatpacks",
-                    "cache/pics/boosterboxes", "cache/pics/precons", "cache/pics/tournamentpacks"
+                    cacheDir + "/pics",
+                    cacheDir + "/pics/cards",
+                    cacheDir + "/pics/tokens",
+                    cacheDir + "/pics/icons",
+                    cacheDir + "/pics/boosters",
+                    cacheDir + "/pics/fatpacks",
+                    cacheDir + "/pics/boosterboxes",
+                    cacheDir + "/pics/precons",
+                    cacheDir + "/pics/tournamentpacks"
             };
 
             for (String dir : imageDirs) {
-                File directory = new File(dir);
-                if (!directory.exists()) {
-                    directory.mkdirs();
-                }
+                createDirectoryIfNotExists(dir);
             }
 
+            // Initialize ImageKeys with proper paths
             Map<String, String> cardSubdirs = new HashMap<>();
             cardSubdirs.put("TUTORIAL", "TUTORIAL");
 
             ImageKeys.initializeDirs(
-                    "cache/pics/cards/",
+                    cacheDir + "/pics/cards/",
                     cardSubdirs,
-                    "cache/pics/tokens/",
-                    "cache/pics/icons/",
-                    "cache/pics/boosters/",
-                    "cache/pics/fatpacks/",
-                    "cache/pics/boosterboxes/",
-                    "cache/pics/precons/",
-                    "cache/pics/tournamentpacks/"
+                    cacheDir + "/pics/tokens/",
+                    cacheDir + "/pics/icons/",
+                    cacheDir + "/pics/boosters/",
+                    cacheDir + "/pics/fatpacks/",
+                    cacheDir + "/pics/boosterboxes/",
+                    cacheDir + "/pics/precons/",
+                    cacheDir + "/pics/tournamentpacks/"
             );
 
-            System.out.println("✓ ImageKeys initialized successfully");
+            log("✓ ImageKeys initialized successfully");
 
         } catch (Exception e) {
             System.err.println("❌ ImageKeys initialization failed: " + e.getMessage());
@@ -156,17 +314,25 @@ public class ForgeApp {
     }
 
     private void createLanguageFiles() throws IOException {
-        File langDir = new File("res/languages");
-        File langFile = new File(langDir, "en-US.txt");
+        File langDir = new File(languageDir);
+        File langFile = new File(langDir, DEFAULT_LANGUAGE + ".txt");
 
         if (!langFile.exists()) {
+            log("📝 Creating language file: " + langFile.getPath());
+
             try (PrintWriter writer = new PrintWriter(langFile)) {
-                writer.println("# Basic language file for Forge");
+                writer.println("# Basic language file for Forge Research");
+                writer.println("# Generated automatically by ForgeApp");
+                writer.println();
+
+                // Essential UI labels
                 writer.println("lblName=Name");
                 writer.println("lblType=Type");
                 writer.println("lblCost=Cost");
                 writer.println("lblPower=Power");
                 writer.println("lblToughness=Toughness");
+
+                // Zone labels
                 writer.println("lblLibrary=Library");
                 writer.println("lblHand=Hand");
                 writer.println("lblBattlefield=Battlefield");
@@ -176,8 +342,80 @@ public class ForgeApp {
                 writer.println("lblCommand=Command");
                 writer.println("lblAnte=Ante");
                 writer.println("lblSideboard=Sideboard");
+
+                // Phase labels
+                writer.println("lblUntapStep=Untap Step");
+                writer.println("lblUpkeepStep=Upkeep Step");
+                writer.println("lblDrawStep=Draw Step");
+                writer.println("lblMainPhase=Main Phase");
+                writer.println("lblCombatPhase=Combat Phase");
+                writer.println("lblEndStep=End Step");
+                writer.println("lblCleanupStep=Cleanup Step");
+
+                // Common game terms
+                writer.println("lblTurn=Turn");
+                writer.println("lblPhase=Phase");
+                writer.println("lblStep=Step");
+                writer.println("lblPlayer=Player");
+                writer.println("lblOpponent=Opponent");
             }
+
+            log("✓ Language file created");
+        }
+    }
+
+    /**
+     * Utility method for conditional logging
+     */
+    private void log(String message) {
+        if (verboseLogging) {
+            System.out.println(message);
+        }
+    }
+
+    /**
+     * Get the current configuration
+     */
+    public ForgeConfig getConfiguration() {
+        ForgeConfig config = new ForgeConfig();
+        config.cardDataDir = this.cardDataDir;
+        config.resDir = this.resDir;
+        config.cacheDir = this.cacheDir;
+        config.languageDir = this.languageDir;
+        config.editionsDir = this.editionsDir;
+        config.blockDataDir = this.blockDataDir;
+        config.createMissingFiles = this.createMissingFiles;
+        config.verboseLogging = this.verboseLogging;
+        return config;
+    }
+
+    /**
+     * Check if the Forge environment is properly initialized
+     */
+    public boolean isInitialized() {
+        try {
+            return StaticData.instance() != null &&
+                    StaticData.instance().getCommonCards() != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get statistics about the initialized environment
+     */
+    public void printEnvironmentInfo() {
+        System.out.println("\n📊 Forge Environment Information:");
+        System.out.println("  Card Data Directory: " + cardDataDir);
+        System.out.println("  Resource Directory: " + resDir);
+        System.out.println("  Cache Directory: " + cacheDir);
+
+        if (isInitialized()) {
+            int cardCount = StaticData.instance().getCommonCards().getAllCards().size();
+            System.out.println("  Total Cards Available: " + cardCount);
+            System.out.println("  Status: ✓ Initialized");
+        } else {
+            System.out.println("  Status: ❌ Not Initialized");
         }
     }
 }
-
