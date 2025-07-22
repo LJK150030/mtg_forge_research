@@ -23,6 +23,8 @@ import java.text.SimpleDateFormat;
  * 1. Event that triggered the change
  * 2. List of variables that changed
  * 3. Full state after the event
+ *
+ * Now with support for controlling hidden state logging per player
  */
 public class GameStateTracker {
 
@@ -35,6 +37,9 @@ public class GameStateTracker {
     private int eventCounter = 0;
 
     private final PrintWriter fileWriter;
+
+    // Map of player name to whether their hidden states should be logged
+    private final Map<String, Boolean> hiddenStateLogging;
 
     /**
      * Complete game state at a point in time
@@ -460,20 +465,21 @@ public class GameStateTracker {
         }
     }
 
-    /**
-     * Constructor
-     */
     public GameStateTracker(Game game, PrintStream output, boolean verboseLogging) {
-        this(game, output, verboseLogging, false, null);
+        this(game, output, verboseLogging, false, null, new HashMap<>());
     }
 
+    /**
+     * Constructor with hidden state logging control
+     */
     public GameStateTracker(Game game, PrintStream output, boolean verboseLogging,
-                            boolean logToFile, String logFilePath) {
+                            boolean logToFile, String logFilePath, Map<String, Boolean> hiddenStateLogging) {
         this.game = game;
         this.output = output;
         this.verboseLogging = verboseLogging;
-        // Output configuration
+        this.hiddenStateLogging = hiddenStateLogging != null ? hiddenStateLogging : new HashMap<>();
 
+        // Output configuration
         if (logToFile && logFilePath != null) {
             try {
                 this.fileWriter = new PrintWriter(new FileWriter(logFilePath));
@@ -485,7 +491,6 @@ public class GameStateTracker {
         }
 
         // Create and register event listener
-        // Event listener
         GameEventListener eventListener = new GameEventListener();
         game.subscribeToEvents(eventListener);
 
@@ -495,11 +500,37 @@ public class GameStateTracker {
     }
 
     /**
+     * Check if we should show card details for a player's hidden zones
+     */
+    private boolean shouldShowHiddenInfo(String playerName) {
+        return hiddenStateLogging.getOrDefault(playerName, false);
+    }
+
+    /**
+     * Check if a zone is hidden information
+     */
+    private boolean isHiddenZone(ZoneType zone) {
+        return zone == ZoneType.Hand || zone == ZoneType.Library;
+    }
+
+    /**
+     * Check if we should show card details for a zone change
+     */
+    private boolean shouldShowCardDetails(String playerName, ZoneType from, ZoneType to) {
+        // Always show public zone changes
+        if (!isHiddenZone(from) && !isHiddenZone(to)) {
+            return true;
+        }
+
+        // Check if we should show this player's hidden info
+        return shouldShowHiddenInfo(playerName);
+    }
+
+    /**
      * Handle an event by capturing state changes
      */
     private void handleEvent(String eventType, String eventDescription) {
         // Save previous state
-        // State tracking
         GameState previousState = currentState;
 
         // Capture new state
@@ -626,33 +657,67 @@ public class GameStateTracker {
             }
         }
 
-        // Battlefield (only if verbose or non-empty)
+        // Zones for each player
         for (Map.Entry<String, Map<ZoneType, List<CardState>>> playerZones : state.zones.entrySet()) {
             String playerName = playerZones.getKey();
-            List<CardState> battlefield = playerZones.getValue().get(ZoneType.Battlefield);
+            boolean showHidden = shouldShowHiddenInfo(playerName);
 
+            // Battlefield (always public)
+            List<CardState> battlefield = playerZones.getValue().get(ZoneType.Battlefield);
             if (!battlefield.isEmpty()) {
                 sb.append("\n   ").append(playerName).append("'s BATTLEFIELD:\n");
                 for (CardState card : battlefield) {
                     sb.append("     • ").append(card).append("\n");
                 }
             }
-        }
 
-        // Other zones (only if verbose)
-        if (verboseLogging) {
-            for (Map.Entry<String, Map<ZoneType, List<CardState>>> playerZones : state.zones.entrySet()) {
-                String playerName = playerZones.getKey();
-                for (Map.Entry<ZoneType, List<CardState>> zoneEntry : playerZones.getValue().entrySet()) {
-                    ZoneType zone = zoneEntry.getKey();
-                    List<CardState> cards = zoneEntry.getValue();
+            // Hand (hidden unless explicitly allowed)
+            List<CardState> hand = playerZones.getValue().get(ZoneType.Hand);
+            if (!hand.isEmpty()) {
+                if (showHidden) {
+                    sb.append("\n   ").append(playerName).append("'s HAND:\n");
+                    for (CardState card : hand) {
+                        sb.append("     • ").append(card.name).append(" [").append(card.id).append("]\n");
+                    }
+                } else if (verboseLogging) {
+                    sb.append("\n   ").append(playerName).append("'s HAND: ")
+                            .append(hand.size()).append(" cards (hidden)\n");
+                }
+            }
 
-                    if (zone != ZoneType.Battlefield && !cards.isEmpty() &&
-                            (zone == ZoneType.Graveyard || zone == ZoneType.Exile)) {
-                        sb.append("\n   ").append(playerName).append("'s ").append(zone).append(":\n");
-                        for (CardState card : cards) {
-                            sb.append("     • ").append(card.name).append(" [").append(card.id).append("]\n");
-                        }
+            // Graveyard (always public)
+            List<CardState> graveyard = playerZones.getValue().get(ZoneType.Graveyard);
+            if (!graveyard.isEmpty()) {
+                sb.append("\n   ").append(playerName).append("'s GRAVEYARD:\n");
+                for (CardState card : graveyard) {
+                    sb.append("     • ").append(card.name).append(" [").append(card.id).append("]\n");
+                }
+            }
+
+            // Exile (always public)
+            List<CardState> exile = playerZones.getValue().get(ZoneType.Exile);
+            if (!exile.isEmpty()) {
+                sb.append("\n   ").append(playerName).append("'s EXILE:\n");
+                for (CardState card : exile) {
+                    sb.append("     • ").append(card.name).append(" [").append(card.id).append("]\n");
+                }
+            }
+
+            // Library (hidden unless explicitly allowed)
+            if (verboseLogging) {
+                List<CardState> library = playerZones.getValue().get(ZoneType.Library);
+                if (showHidden && !library.isEmpty()) {
+                    sb.append("\n   ").append(playerName).append("'s LIBRARY TOP CARDS:\n");
+                    // Show only top few cards to avoid massive logs
+                    int cardsToShow = Math.min(5, library.size());
+                    for (int i = 0; i < cardsToShow; i++) {
+                        CardState card = library.get(i);
+                        sb.append("     • ").append(i + 1).append(": ")
+                                .append(card.name).append(" [").append(card.id).append("]\n");
+                    }
+                    if (library.size() > cardsToShow) {
+                        sb.append("     • ... and ").append(library.size() - cardsToShow)
+                                .append(" more cards\n");
                     }
                 }
             }
@@ -700,7 +765,13 @@ public class GameStateTracker {
                 delta.addChange("MANA", playerName + ": " + oldPlayer.manaPool + " → " + newPlayer.manaPool);
             }
             if (oldPlayer.handSize != newPlayer.handSize) {
-                delta.addChange("HAND", playerName + ": " + oldPlayer.handSize + " → " + newPlayer.handSize + " cards");
+                String change = playerName + ": " + oldPlayer.handSize + " → " + newPlayer.handSize + " cards";
+                if (shouldShowHiddenInfo(playerName)) {
+                    // If we can see hidden info, we might add more detail later
+                    delta.addChange("HAND", change);
+                } else {
+                    delta.addChange("HAND", change + " (contents hidden)");
+                }
             }
             if (oldPlayer.librarySize != newPlayer.librarySize) {
                 delta.addChange("LIBRARY", playerName + ": " + oldPlayer.librarySize + " → " + newPlayer.librarySize + " cards");
@@ -717,6 +788,7 @@ public class GameStateTracker {
         for (String playerName : oldState.zones.keySet()) {
             Map<ZoneType, List<CardState>> oldZones = oldState.zones.get(playerName);
             Map<ZoneType, List<CardState>> newZones = newState.zones.get(playerName);
+            boolean showHidden = shouldShowHiddenInfo(playerName);
 
             for (ZoneType zone : ZoneType.values()) {
                 List<CardState> oldCards = oldZones.get(zone);
@@ -733,8 +805,17 @@ public class GameStateTracker {
                             if (targetZone != zone) {
                                 List<CardState> targetCards = newZones.get(targetZone);
                                 if (targetCards.stream().anyMatch(c -> c.id == oldCard.id)) {
-                                    delta.addChange("ZONE_CHANGE",
-                                            oldCard.name + " moved from " + zone + " to " + targetZone);
+                                    // Check if we should show card name based on zones and player settings
+                                    boolean showCardName = shouldShowCardDetails(playerName, zone, targetZone);
+
+                                    if (showCardName) {
+                                        delta.addChange("ZONE_CHANGE",
+                                                oldCard.name + " moved from " + zone + " to " + targetZone);
+                                    } else {
+                                        delta.addChange("ZONE_CHANGE",
+                                                "A card moved from " + zone + " to " + targetZone +
+                                                        " (Player: " + playerName + ")");
+                                    }
                                     break;
                                 }
                             }
