@@ -224,5 +224,16 @@ public class ForgeMatch {
                 output.println("  • Full state transition log saved to: " + config.stateLogPath);
             }
         }
+
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Shutdown Neo4J connection
+            try {
+                Neo4jService.shutdown();
+                System.out.println("Neo4J connection closed");
+            } catch (Exception e) {
+                System.err.println("Error closing Neo4J connection: " + e.getMessage());
+            }
+        }));
     }
 }

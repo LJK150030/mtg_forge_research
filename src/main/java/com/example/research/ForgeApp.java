@@ -6,9 +6,7 @@ import forge.StaticData;
 import forge.util.Lang;
 import forge.util.Localizer;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -148,11 +146,90 @@ public class ForgeApp {
             setupLocalization();
             initializeStaticData();
 
+            initializeNeo4jConnection();
+
             log("✓ Forge environment initialized successfully");
 
         } catch (Exception e) {
             System.err.println("❌ Failed to initialize Forge environment: " + e.getMessage());
             throw new RuntimeException("Forge initialization failed", e);
+        }
+    }
+
+    /**
+     * Initialize Neo4J database connection using configuration from properties files
+     */
+    private static void initializeNeo4jConnection() {
+        try {
+            // First, load the template configuration
+            Properties configProps = new Properties();
+            Path configPath = Paths.get("res/neo4j/forge-config.properties");
+
+            if (!Files.exists(configPath)) {
+                System.err.println("Neo4J config file not found at: " + configPath);
+                return;
+            }
+
+            try (InputStream configStream = new FileInputStream(configPath.toFile())) {
+                configProps.load(configStream);
+            }
+
+            // Check if Neo4J is enabled
+            boolean enabled = Boolean.parseBoolean(configProps.getProperty("neo4j.enabled", "false"));
+            if (!enabled) {
+                System.out.println("Neo4J integration is disabled in configuration");
+                return;
+            }
+
+            // Now load the actual credentials from the credentials file
+            Properties credentialsProps = new Properties();
+            Path credentialsPath = Paths.get("res/neo4j/Neo4j-bf31f3ea-Created-2025-07-30.txt");
+
+            if (!Files.exists(credentialsPath)) {
+                System.err.println("Neo4J credentials file not found at: " + credentialsPath);
+                return;
+            }
+
+            // Parse the credentials file (it's in KEY=VALUE format)
+            try {
+                for (String line : Files.readAllLines(credentialsPath)) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#")) {
+                        continue;
+                    }
+
+                    int equalsIndex = line.indexOf('=');
+                    if (equalsIndex > 0) {
+                        String key = line.substring(0, equalsIndex).trim();
+                        String value = line.substring(equalsIndex + 1).trim();
+                        credentialsProps.setProperty(key, value);
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("Failed to read credentials file: " + e.getMessage());
+                return;
+            }
+
+            // Create Neo4J configuration using the actual credentials
+            Neo4jService.Neo4jConfig neo4jConfig = Neo4jService.Neo4jConfig.defaultConfig()
+                    .withUri(credentialsProps.getProperty("NEO4J_URI", configProps.getProperty("neo4j.uri")))
+                    .withAuth(
+                            credentialsProps.getProperty("NEO4J_USERNAME", configProps.getProperty("neo4j.username")),
+                            credentialsProps.getProperty("NEO4J_PASSWORD", configProps.getProperty("neo4j.password"))
+                    )
+                    .withDatabase(credentialsProps.getProperty("NEO4J_DATABASE", configProps.getProperty("neo4j.database")));
+
+            // Initialize the Neo4J service
+            Neo4jService.initialize(neo4jConfig);
+
+            System.out.println("✓ Neo4J connection initialized successfully");
+            System.out.println("  Connected to: " + credentialsProps.getProperty("NEO4J_URI"));
+            System.out.println("  Database: " + credentialsProps.getProperty("NEO4J_DATABASE"));
+            System.out.println("  Instance: " + credentialsProps.getProperty("AURA_INSTANCENAME", "Unknown"));
+
+        } catch (Exception e) {
+            System.err.println("❌ Failed to initialize Neo4J connection: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
