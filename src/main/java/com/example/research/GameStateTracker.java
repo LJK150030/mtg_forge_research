@@ -13,6 +13,7 @@ import forge.game.zone.*;
 import forge.game.mana.*;
 
 import com.google.common.eventbus.Subscribe;
+import org.neo4j.driver.TransactionContext;
 
 import java.io.*;
 import java.util.*;
@@ -42,6 +43,11 @@ public class GameStateTracker {
     // Map of player name to whether their hidden states should be logged
     private final Map<String, Boolean> hiddenStateLogging;
 
+    private final Neo4jService neo4j;
+    private String gameNodeId;
+    private String previousStateNodeId;
+    private String currentStateNodeId;
+
 
     public GameStateTracker(Game game, PrintStream output, boolean verboseLogging) {
         this(game, output, verboseLogging, false, null, new HashMap<>());
@@ -51,7 +57,8 @@ public class GameStateTracker {
      * Constructor with hidden state logging control
      */
     public GameStateTracker(Game game, PrintStream output, boolean verboseLogging,
-                            boolean logToFile, String logFilePath, Map<String, Boolean> hiddenStateLogging) {
+                            boolean logToFile, String logFilePath,
+                            Map<String, Boolean> hiddenStateLogging) {
         this.game = game;
         this.output = output;
         this.verboseLogging = verboseLogging;
@@ -72,8 +79,12 @@ public class GameStateTracker {
         GameEventListener eventListener = new GameEventListener();
         game.subscribeToEvents(eventListener);
 
+        this.neo4j = Neo4jService.getInstance();
+        initializeGameInNeo4j();
+
         // Capture initial state
         currentState = new StateInfo.GameState(game);
+
         logEvent("GAME_START", "Initial game state", new StateInfo.StateDelta());
     }
 
@@ -843,6 +854,63 @@ public class GameStateTracker {
         return zone == ZoneType.Hand || zone == ZoneType.Library;
     }
 
+
+    private void initializeGameInNeo4j() {
+        Map<String, Object> result = neo4j.writeTransaction(tx -> {
+            String query = """
+            CREATE (g:Game {
+                id: $gameId,
+                timestamp: $timestamp,
+                players: $players
+            })
+            RETURN g.id as gameId
+            """;
+
+            Map<String, Object> params = Map.of(
+                    "gameId", String.valueOf(game.getId()), // Convert to String here
+                    "timestamp", System.currentTimeMillis(),
+                    "players", game.getPlayers().stream()
+                            .map(Player::getName)
+                            .collect(Collectors.toList())
+            );
+
+            return tx.run(query, params).single().asMap();
+        });
+
+        this.gameNodeId = (String) result.get("gameId"); // Now this will work
+
+        // Create player nodes
+        createPlayerNodes();
+    }
+
+    private void createPlayerNodes() {
+        neo4j.writeTransaction(tx -> {
+            for (Player p : game.getPlayers()) {
+                String query = """
+                MATCH (g:Game {id: $gameId})
+                CREATE (p:Player {
+                    name: $name,
+                    gameId: $gameId,
+                    startingLife: $startingLife,
+                    isAI: $isAI
+                })
+                CREATE (g)-[:HAS_PLAYER]->(p)
+                """;
+
+                Map<String, Object> params = Map.of(
+                        "gameId", gameNodeId, // This is already a String now
+                        "name", p.getName(),
+                        "startingLife", p.getStartingLife(),
+                        "isAI", p.getController().isAI()
+                );
+
+                tx.run(query, params);
+            }
+            return null;
+        });
+    }
+
+
     /**
      * Check if we should show card details for a zone change
      */
@@ -862,6 +930,7 @@ public class GameStateTracker {
     private void handleEvent(String eventType, String eventDescription) {
         // Save previous state
         StateInfo.GameState previousState = currentState;
+        String prevStateId = currentStateNodeId;
 
         // Capture new state
         currentState = new StateInfo.GameState(game);
@@ -869,8 +938,33 @@ public class GameStateTracker {
         // Compute changes
         StateInfo.StateDelta delta = computeDelta(previousState, currentState);
 
-        // Log the event
+        // Save to Neo4j
+        saveEventAndStateToNeo4j(eventType, eventDescription, delta, prevStateId);
+
+        // Log the event (existing functionality)
         logEvent(eventType, eventDescription, delta);
+    }
+
+    private void saveEventAndStateToNeo4j(String eventType, String eventDescription,
+                                          StateInfo.StateDelta delta, String prevStateId) {
+        neo4j.writeTransaction(tx -> {
+            // Create GameState node
+            String stateNodeId = createGameStateNode(tx);
+
+            // Create GameEvent node
+            String eventNodeId = createGameEventNode(tx, eventType, eventDescription, delta);
+
+            // Create relationships
+            createStateTransitionRelationships(tx, prevStateId, stateNodeId, eventNodeId);
+
+            // Update game entities based on delta
+            updateGameEntities(tx, delta);
+
+            // Store current state ID for next transition
+            currentStateNodeId = stateNodeId;
+
+            return null;
+        });
     }
 
     /**
@@ -1210,5 +1304,371 @@ public class GameStateTracker {
         }
 
         return sb.toString();
+    }
+
+    private String createGameStateNode(TransactionContext tx) {
+        String stateId = UUID.randomUUID().toString();
+
+        String query = """
+        CREATE (s:GameState {
+            id: $stateId,
+            gameId: $gameId,
+            timestamp: $timestamp,
+            eventNumber: $eventNumber,
+            turn: $turn,
+            phase: $phase,
+            activePlayer: $activePlayer,
+            priorityPlayer: $priorityPlayer,
+            stackSize: $stackSize
+        })
+        RETURN s.id as stateId
+        """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("stateId", stateId);
+        params.put("gameId", gameNodeId); // gameNodeId is already a String
+        params.put("timestamp", System.currentTimeMillis());
+        params.put("eventNumber", eventCounter);
+        params.put("turn", currentState.turnNumber);
+        params.put("phase", currentState.phase != null ? currentState.phase.toString() : "NOT_STARTED");
+        params.put("activePlayer", currentState.activePlayer);
+        params.put("priorityPlayer", currentState.priorityPlayer);
+        params.put("stackSize", currentState.stack.size());
+
+        tx.run(query, params);
+
+        // Create detailed state nodes
+        createPlayerStateNodes(tx, stateId);
+        createZoneStateNodes(tx, stateId);
+
+        if (currentState.combat != null) {
+            createCombatStateNode(tx, stateId);
+        }
+
+        return stateId;
+    }
+
+    private void createPlayerStateNodes(TransactionContext tx, String stateId) {
+        for (StateInfo.PlayerState playerState : currentState.players.values()) {
+            String query = """
+                MATCH (s:GameState {id: $stateId})
+                MATCH (p:Player {name: $playerName, gameId: $gameId})
+                CREATE (ps:PlayerState {
+                    stateId: $stateId,
+                    playerName: $playerName,
+                    life: $life,
+                    poisonCounters: $poison,
+                    manaPool: $manaPool,
+                    cardsInHand: $handSize,
+                    landsPlayed: $landsPlayed
+                })
+                CREATE (s)-[:HAS_PLAYER_STATE]->(ps)
+                CREATE (ps)-[:STATE_OF]->(p)
+                """;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("stateId", stateId);
+            params.put("gameId", gameNodeId);
+            params.put("playerName", playerState.name);
+            params.put("life", playerState.life);
+            params.put("poison", playerState.poisonCounters);
+            params.put("manaPool", playerState.manaPool.toManaString());
+            params.put("handSize", playerState.zoneCounts.get(ZoneType.Hand));
+            params.put("landsPlayed", playerState.turnState.landsPlayedThisTurn);
+
+            tx.run(query, params);
+        }
+    }
+
+    private void createZoneStateNodes(TransactionContext tx, String stateId) {
+        for (Map.Entry<String, Map<ZoneType, StateInfo.ZoneState>> playerZones :
+                currentState.zones.entrySet()) {
+
+            String playerName = playerZones.getKey();
+            boolean showHidden = shouldShowHiddenInfo(playerName);
+
+            for (Map.Entry<ZoneType, StateInfo.ZoneState> zoneEntry :
+                    playerZones.getValue().entrySet()) {
+
+                ZoneType zoneType = zoneEntry.getKey();
+                StateInfo.ZoneState zone = zoneEntry.getValue();
+
+                // Only store public zones or zones we're allowed to see
+                if (!isHiddenZone(zoneType) || showHidden) {
+                    createZoneNode(tx, stateId, playerName, zone);
+
+                    // Create card nodes for visible cards
+                    if (zoneType == ZoneType.Battlefield ||
+                            zoneType == ZoneType.Graveyard ||
+                            zoneType == ZoneType.Exile ||
+                            (showHidden && !zone.cards.isEmpty())) {
+
+                        createCardNodes(tx, stateId, zone);
+                    }
+                }
+            }
+        }
+    }
+
+    private void createZoneNode(TransactionContext tx, String stateId,
+                                String playerName, StateInfo.ZoneState zone) {
+        String query = """
+            MATCH (s:GameState {id: $stateId})
+            CREATE (z:Zone {
+                stateId: $stateId,
+                type: $zoneType,
+                owner: $owner,
+                cardCount: $cardCount
+            })
+            CREATE (s)-[:HAS_ZONE]->(z)
+            """;
+
+        Map<String, Object> params = Map.of(
+                "stateId", stateId,
+                "zoneType", zone.type.toString(),
+                "owner", playerName,
+                "cardCount", zone.size
+        );
+
+        tx.run(query, params);
+    }
+
+    private void createCardNodes(TransactionContext tx, String stateId,
+                                 StateInfo.ZoneState zone) {
+        for (StateInfo.CardState card : zone.cards) {
+            String query = """
+            CREATE (c:Card {
+                stateId: $stateId,
+                cardId: $cardId,
+                name: $name,
+                zone: $zone,
+                controller: $controller,
+                owner: $owner,
+                power: $power,
+                toughness: $toughness,
+                tapped: $tapped,
+                damage: $damage,
+                types: $types,
+                keywords: $keywords
+            })
+            WITH c
+            MATCH (z:Zone {stateId: $stateId, type: $zone, owner: $owner})
+            CREATE (c)-[:IN_ZONE]->(z)
+            """;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("stateId", stateId);
+            params.put("cardId", card.id);
+            params.put("name", card.name);
+            params.put("zone", zone.type.toString());
+            params.put("controller", card.controller);
+            params.put("owner", card.owner);
+            params.put("power", card.power);
+            params.put("toughness", card.toughness);
+            params.put("tapped", card.tapped);
+            params.put("damage", card.damage);
+
+            // Convert CoreType objects to strings
+            List<String> typeStrings = new ArrayList<>();
+            if (card.type != null && card.type.getCoreTypes() != null) {
+                for (Object coreType : card.type.getCoreTypes()) {
+                    typeStrings.add(coreType.toString());
+                }
+            }
+            params.put("types", typeStrings);
+
+            params.put("keywords", new ArrayList<>(card.keywords));
+
+            tx.run(query, params);
+
+            // Create relationships for attachments, blocks, etc.
+            if (card.attacking) {
+                createAttackingRelationship(tx, stateId, card);
+            }
+            if (card.blocking) {
+                createBlockingRelationships(tx, stateId, card);
+            }
+        }
+    }
+
+    private void createCombatStateNode(TransactionContext tx, String stateId) {
+        StateInfo.CombatState combat = currentState.combat;
+
+        String query = """
+            MATCH (s:GameState {id: $stateId})
+            CREATE (c:Combat {
+                stateId: $stateId,
+                attackingPlayer: $attackingPlayer,
+                totalAttackers: $totalAttackers,
+                totalDamage: $totalDamage,
+                turn: $turn,
+                combatNumber: $combatNumber
+            })
+            CREATE (s)-[:HAS_COMBAT]->(c)
+            """;
+
+        Map<String, Object> params = Map.of(
+                "stateId", stateId,
+                "attackingPlayer", combat.attackingPlayer,
+                "totalAttackers", combat.totalAttackers,
+                "totalDamage", combat.totalDamageOnBoard,
+                "turn", combat.turn,
+                "combatNumber", combat.combatNumber
+        );
+
+        tx.run(query, params);
+    }
+
+    private String createGameEventNode(TransactionContext tx, String eventType,
+                                       String eventDescription, StateInfo.StateDelta delta) {
+        String eventId = UUID.randomUUID().toString();
+
+        String query = """
+            CREATE (e:GameEvent {
+                id: $eventId,
+                gameId: $gameId,
+                type: $eventType,
+                description: $description,
+                timestamp: $timestamp,
+                eventNumber: $eventNumber,
+                changes: $changes
+            })
+            RETURN e.id as eventId
+            """;
+
+        Map<String, Object> params = Map.of(
+                "eventId", eventId,
+                "gameId", gameNodeId,
+                "eventType", eventType,
+                "description", eventDescription,
+                "timestamp", System.currentTimeMillis(),
+                "eventNumber", eventCounter,
+                "changes", delta.changes
+        );
+
+        tx.run(query, params);
+        return eventId;
+    }
+
+    private void createStateTransitionRelationships(TransactionContext tx,
+                                                    String prevStateId,
+                                                    String newStateId,
+                                                    String eventId) {
+        if (prevStateId != null) {
+            // Link states
+            String linkStatesQuery = """
+                MATCH (prev:GameState {id: $prevStateId})
+                MATCH (next:GameState {id: $nextStateId})
+                CREATE (prev)-[:NEXT_STATE]->(next)
+                """;
+
+            tx.run(linkStatesQuery, Map.of(
+                    "prevStateId", prevStateId,
+                    "nextStateId", newStateId
+            ));
+        }
+
+        // Link event to states
+        String linkEventQuery = """
+            MATCH (e:GameEvent {id: $eventId})
+            MATCH (s:GameState {id: $stateId})
+            CREATE (e)-[:RESULTED_IN]->(s)
+            CREATE (s)-[:TRIGGERED_BY]->(e)
+            """;
+
+        tx.run(linkEventQuery, Map.of(
+                "eventId", eventId,
+                "stateId", newStateId
+        ));
+
+        if (prevStateId != null) {
+            String linkEventToPrevQuery = """
+                MATCH (e:GameEvent {id: $eventId})
+                MATCH (prev:GameState {id: $prevStateId})
+                CREATE (prev)-[:CAUSED]->(e)
+                """;
+
+            tx.run(linkEventToPrevQuery, Map.of(
+                    "eventId", eventId,
+                    "prevStateId", prevStateId
+            ));
+        }
+    }
+
+    private void updateGameEntities(TransactionContext tx, StateInfo.StateDelta delta) {
+        // Update based on specific change categories
+        for (Map.Entry<String, List<String>> categoryChanges :
+                delta.categorizedChanges.entrySet()) {
+
+            String category = categoryChanges.getKey();
+            List<String> changes = categoryChanges.getValue();
+
+            switch (category) {
+                case "LIFE":
+                    updateLifeTotals(tx, changes);
+                    break;
+                case "ZONE":
+                    updateZoneChanges(tx, changes);
+                    break;
+                case "COMBAT":
+                    updateCombatInfo(tx, changes);
+                    break;
+                // Add more categories as needed
+            }
+        }
+    }
+
+    private void createAttackingRelationship(TransactionContext tx, String stateId,
+                                             StateInfo.CardState attacker) {
+        if (attacker.attackingTarget != null) {
+            String query = """
+                MATCH (c:Card {stateId: $stateId, cardId: $cardId})
+                MATCH (s:GameState {id: $stateId})
+                CREATE (c)-[:ATTACKING {target: $target}]->(s)
+                """;
+
+            tx.run(query, Map.of(
+                    "stateId", stateId,
+                    "cardId", attacker.id,
+                    "target", attacker.attackingTarget
+            ));
+        }
+    }
+
+    private void createBlockingRelationships(TransactionContext tx, String stateId,
+                                             StateInfo.CardState blocker) {
+        for (Integer blockedId : blocker.blockingCards) {
+            String query = """
+                MATCH (blocker:Card {stateId: $stateId, cardId: $blockerId})
+                MATCH (attacker:Card {stateId: $stateId, cardId: $attackerId})
+                CREATE (blocker)-[:BLOCKING]->(attacker)
+                """;
+
+            tx.run(query, Map.of(
+                    "stateId", stateId,
+                    "blockerId", blocker.id,
+                    "attackerId", blockedId
+            ));
+        }
+    }
+
+    // Implement update methods for specific change types
+    private void updateLifeTotals(TransactionContext tx, List<String> changes) {
+        // Parse life changes and update player nodes
+        for (String change : changes) {
+            // Parse: "PlayerName life changed from X to Y"
+            // Update the Player node with new life total
+        }
+    }
+
+    private void updateZoneChanges(TransactionContext tx, List<String> changes) {
+        // Handle card movements between zones
+        for (String change : changes) {
+            // Parse zone changes and create movement relationships
+        }
+    }
+
+    private void updateCombatInfo(TransactionContext tx, List<String> changes) {
+        // Update combat-related information
     }
 }
