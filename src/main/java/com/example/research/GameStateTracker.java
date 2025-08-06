@@ -13,12 +13,14 @@ import forge.game.zone.*;
 import forge.game.mana.*;
 
 import com.google.common.eventbus.Subscribe;
+import org.neo4j.driver.Transaction;
 import org.neo4j.driver.TransactionContext;
 
 import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.text.SimpleDateFormat;
+import java.util.UUID;
 
 /**
  * Game State Tracker that logs state transitions in the format:
@@ -47,6 +49,13 @@ public class GameStateTracker {
     private String gameNodeId;
     private String previousStateNodeId;
     private String currentStateNodeId;
+
+
+    private Map<String, Integer> phaseCountByTurn = new HashMap<>();
+    private String currentTurnNodeId;
+    private String currentPhaseNodeId;
+    private String currentPriorityNodeId;
+    private int priorityPassCount = 0;
 
 
     public GameStateTracker(Game game, PrintStream output, boolean verboseLogging) {
@@ -99,10 +108,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventGameStarted", desc.toString());
+            //handleEvent("GameEventGameStarted", desc.toString());
         }
 
         @Subscribe
@@ -110,10 +119,22 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventTurnBegan", desc.toString());
+            //handleEvent("GameEventTurnBegan", desc.toString());
+
+            // Create Turn node
+            currentTurnNodeId = createTurnNode(event.turnNumber, event.turnOwner.getName());
+
+            // Reset counters
+            phaseCountByTurn.put(currentTurnNodeId, 0);
+
+            // Log the event
+            desc.append(String.format(" | Turn %d began | Turn Owner: %s",
+                    event.turnNumber, event.turnOwner.getName()));
+
+            handleEvent("TURN_BEGAN", String.valueOf(desc));
         }
 
         @Subscribe
@@ -121,21 +142,67 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventTurnEnded", desc.toString());
+            // Update turn node with final statistics
+            updateTurnNodeOnEnd(currentTurnNodeId);
+
+            desc.append(String.format(" | Turn %d ended | Active Player: %s",
+                    ph.getTurn(), ph.getPlayerTurn().getName()));
+
+            handleEvent("TURN_ENDED", String.valueOf(desc));
         }
 
         @Subscribe
         public void onPhaseChanged(GameEventTurnPhase event) {
-            StringBuilder desc = new StringBuilder();
+            try {
+                StringBuilder desc = new StringBuilder();
 
-            PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
-            desc.append(" | Turn: ").append(ph.getTurn());
+                PhaseHandler ph = game.getPhaseHandler();
+                desc.append(" | Phase: ").append(ph.getPhase());
+                desc.append(" | Turn: ").append(ph.getTurn());
 
-            handleEvent("GameEventTurnPhase", desc.toString());
+                // Check if we need to create the turn node first
+                if (currentTurnNodeId == null && ph.getTurn() > 0) {
+                    // This phase event fired before turn began event
+                    String activePlayer = event.playerTurn != null ? event.playerTurn.getName() : ph.getPlayerTurn().getName();
+                    currentTurnNodeId = createTurnNode(ph.getTurn(), activePlayer);
+                    phaseCountByTurn.put(currentTurnNodeId, 0);
+                }
+
+                // Skip if we still don't have a turn (e.g., during game setup)
+                if (currentTurnNodeId == null) {
+                    System.err.println("Phase event before game properly started: " + event.phase);
+                    return;
+                }
+
+                // Increment phase count for this turn
+                int phaseNum = phaseCountByTurn.getOrDefault(currentTurnNodeId, 0) + 1;
+                phaseCountByTurn.put(currentTurnNodeId, phaseNum);
+
+                // Create Phase node
+                currentPhaseNodeId = createPhaseNode(
+                        event.phase.toString(),
+                        event.phase.nameForUi,
+                        event.phaseDesc,
+                        game.getPhaseHandler().getTurn(),
+                        phaseNum,
+                        event.playerTurn.getName()
+                );
+
+                // Reset priority pass count for new phase
+                priorityPassCount = 0;
+
+                desc.append(String.format(" | Phase changed to %s (%s) | Player: %s",
+                        event.phase.nameForUi, event.phaseDesc, event.playerTurn.getName()));
+
+                handleEvent("PHASE_CHANGED", String.valueOf(desc));
+
+            } catch (Exception e) {
+                System.err.println("Error handling phase change: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         @Subscribe
@@ -143,10 +210,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardChangeZone", desc.toString());
+            //handleEvent("GameEventCardChangeZone", desc.toString());
         }
 
         @Subscribe
@@ -154,10 +221,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardTapped", desc.toString());
+            //handleEvent("GameEventCardTapped", desc.toString());
         }
 
         @Subscribe
@@ -165,10 +232,59 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSpellAbilityCast", desc.toString());
+            // Record the action at the priority level
+            Map<String, Object> actionDetails = new HashMap<>();
+            actionDetails.put("spellName", event.sa.getHostCard().getName());
+            actionDetails.put("stackIndex", event.stackIndex);
+            actionDetails.put("isAbility", event.sa.isAbility());
+            actionDetails.put("description", event.sa.getDescription());
+
+            // Get mana cost if available
+            if (event.sa.getPayCosts() != null && event.sa.getPayCosts().getTotalMana() != null) {
+                actionDetails.put("manaCost", event.sa.getPayCosts().getTotalMana().toString());
+            }
+
+            // Get controller
+            if (event.sa.getActivatingPlayer() != null) {
+                actionDetails.put("controller", event.sa.getActivatingPlayer().getName());
+            }
+
+            // Get host card ID if available
+            if (event.sa.getHostCard() != null) {
+                actionDetails.put("cardId", event.sa.getHostCard().getId());
+                actionDetails.put("cardName", event.sa.getHostCard().getName());
+            }
+
+            // Get stack instance details if available
+            if (event.si != null) {
+                actionDetails.put("stackInstanceId", event.si.getId());
+                if (event.si.getSpellAbility() != null) {
+                    actionDetails.put("stackDescription", event.si.getStackDescription());
+                }
+            }
+
+            recordPriorityAction("cast_spell", actionDetails);
+
+            // Create an Action node for this spell cast
+            createActionNode("SPELL_CAST", actionDetails);
+
+            // Also handle as a regular event
+            if (event.sa.getActivatingPlayer() != null) {
+                desc.append(event.sa.getActivatingPlayer().getName());
+            } else {
+                desc.append(" |  Unknown player");
+            }
+            desc.append("  | cast ");
+            desc.append(event.sa.getHostCard().getName() != null ? event.sa.getHostCard().getName() : "spell");
+            desc.append("  | (stack position: ").append(event.stackIndex).append(")");
+
+            desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
+
+            handleEvent("SPELL_CAST", desc.toString());
         }
 
         @Subscribe
@@ -176,10 +292,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSpellResolved", desc.toString());
+            //handleEvent("GameEventSpellResolved", desc.toString());
         }
 
         @Subscribe
@@ -187,10 +303,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventAttackersDeclared", desc.toString());
+            //handleEvent("GameEventAttackersDeclared", desc.toString());
         }
 
         @Subscribe
@@ -198,10 +314,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventBlockersDeclared", desc.toString());
+            //handleEvent("GameEventBlockersDeclared", desc.toString());
         }
 
         @Subscribe
@@ -209,10 +325,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCombatEnded", desc.toString());
+            //handleEvent("GameEventCombatEnded", desc.toString());
         }
 
         @Subscribe
@@ -220,10 +336,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerLivesChanged", desc.toString());
+            //handleEvent("GameEventPlayerLivesChanged", desc.toString());
         }
 
         @Subscribe
@@ -231,10 +347,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardDamaged", desc.toString());
+            //handleEvent("GameEventCardDamaged", desc.toString());
         }
 
         @Subscribe
@@ -242,21 +358,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
-
-            handleEvent("GameEventCardDestroyed", desc.toString());
-        }
-
-        @Subscribe
-        public void onLandPlayed(GameEventLandPlayed event) {
-            StringBuilder desc = new StringBuilder();
-
-            PhaseHandler ph = game.getPhaseHandler();
             desc.append(" | Phase: ").append(ph.getPhase());
-            desc.append(" | Turn: ").append(ph.getTurn());
 
-            handleEvent("GameEventLandPlayed", desc.toString());
+            //handleEvent("GameEventCardDestroyed", desc.toString());
         }
 
         @Subscribe
@@ -264,10 +369,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventManaPool", desc.toString());
+            //handleEvent("GameEventManaPool", desc.toString());
         }
 
         @Subscribe
@@ -275,10 +380,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardCounters", desc.toString());
+            //handleEvent("GameEventCardCounters", desc.toString());
         }
 
         @Subscribe
@@ -286,10 +391,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerCounters", desc.toString());
+            //handleEvent("GameEventPlayerCounters", desc.toString());
         }
 
         @Subscribe
@@ -297,10 +402,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventGameFinished", desc.toString());
+            //handleEvent("GameEventGameFinished", desc.toString());
         }
 
         @Subscribe
@@ -308,10 +413,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventGameOutcome", desc.toString());
+            //handleEvent("GameEventGameOutcome", desc.toString());
         }
 
         @Subscribe
@@ -325,7 +430,7 @@ public class GameStateTracker {
 //            desc.append(" | Phase: ").append(ph.getPhase());
 //            desc.append(" | Turn: ").append(ph.getTurn());
 //
-//            handleEvent("GameEventAnteCardsSelected", desc.toString());
+//            //handleEvent("GameEventAnteCardsSelected", desc.toString());
         }
 
         @Subscribe
@@ -333,10 +438,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardAttachment", desc.toString());
+            //handleEvent("GameEventCardAttachment", desc.toString());
         }
 
         @Subscribe
@@ -344,10 +449,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardForetold", desc.toString());
+            //handleEvent("GameEventCardForetold", desc.toString());
         }
 
         @Subscribe
@@ -355,10 +460,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardModeChosen", desc.toString());
+            //handleEvent("GameEventCardModeChosen", desc.toString());
         }
 
         @Subscribe
@@ -366,10 +471,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardPhased", desc.toString());
+            //handleEvent("GameEventCardPhased", desc.toString());
         }
 
         @Subscribe
@@ -377,10 +482,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardPlotted", desc.toString());
+            //handleEvent("GameEventCardPlotted", desc.toString());
         }
 
         @Subscribe
@@ -388,10 +493,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardRegenerated", desc.toString());
+            //handleEvent("GameEventCardRegenerated", desc.toString());
         }
 
         @Subscribe
@@ -399,10 +504,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardSacrificed", desc.toString());
+            //handleEvent("GameEventCardSacrificed", desc.toString());
         }
 
         @Subscribe
@@ -410,10 +515,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCardStatsChanged", desc.toString());
+            //handleEvent("GameEventCardStatsChanged", desc.toString());
         }
 
         @Subscribe
@@ -421,10 +526,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCombatChanged", desc.toString());
+            //handleEvent("GameEventCombatChanged", desc.toString());
         }
 
         @Subscribe
@@ -432,10 +537,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventCombatUpdate", desc.toString());
+            //handleEvent("GameEventCombatUpdate", desc.toString());
         }
 
         @Subscribe
@@ -443,10 +548,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventDayTimeChanged", desc.toString());
+            //handleEvent("GameEventDayTimeChanged", desc.toString());
         }
 
         @Subscribe
@@ -454,10 +559,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventDoorChanged", desc.toString());
+            //handleEvent("GameEventDoorChanged", desc.toString());
         }
 
         @Subscribe
@@ -465,10 +570,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventFlipCoin", desc.toString());
+            //handleEvent("GameEventFlipCoin", desc.toString());
         }
 
         @Subscribe
@@ -476,10 +581,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventGameRestarted", desc.toString());
+            //handleEvent("GameEventGameRestarted", desc.toString());
         }
 
         @Subscribe
@@ -487,10 +592,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventManaBurn", desc.toString());
+            //handleEvent("GameEventManaBurn", desc.toString());
         }
 
         @Subscribe
@@ -498,10 +603,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventMulligan", desc.toString());
+            //handleEvent("GameEventMulligan", desc.toString());
         }
 
         @Subscribe
@@ -509,10 +614,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerControl", desc.toString());
+            //handleEvent("GameEventPlayerControl", desc.toString());
         }
 
         @Subscribe
@@ -520,10 +625,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerDamaged", desc.toString());
+            //handleEvent("GameEventPlayerDamaged", desc.toString());
         }
 
         @Subscribe
@@ -531,21 +636,82 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerPoisoned", desc.toString());
+            //handleEvent("GameEventPlayerPoisoned", desc.toString());
         }
 
         @Subscribe
         public void onPlayerPriority(GameEventPlayerPriority event) {
-            StringBuilder desc = new StringBuilder();
+            try {
+                StringBuilder desc = new StringBuilder();
 
-            PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
-            desc.append(" | Turn: ").append(ph.getTurn());
+                PhaseHandler ph = game.getPhaseHandler();
+                desc.append(" | Phase: ").append(ph.getPhase());
+                desc.append(" | Turn: ").append(ph.getTurn());
 
-            handleEvent("GameEventPlayerPriority", desc.toString());
+                // Check if we need to create turn/phase nodes first
+                if (currentTurnNodeId == null && ph.getTurn() > 0) {
+                    String activePlayer = event.turn != null ? event.turn.getName() : ph.getPlayerTurn().getName();
+                    currentTurnNodeId = createTurnNode(ph.getTurn(), activePlayer);
+                    phaseCountByTurn.put(currentTurnNodeId, 0);
+                }
+
+                if (currentPhaseNodeId == null && currentTurnNodeId != null) {
+                    // Create a phase node for this priority event
+                    int phaseNum = phaseCountByTurn.getOrDefault(currentTurnNodeId, 0) + 1;
+                    phaseCountByTurn.put(currentTurnNodeId, phaseNum);
+
+                    currentPhaseNodeId = createPhaseNode(
+                            event.phase.toString(),
+                            event.phase.nameForUi,
+                            event.phase.toString(), // Use phase toString as description
+                            ph.getTurn(),
+                            phaseNum,
+                            event.turn.getName()
+                    );
+                    priorityPassCount = 0;
+                }
+
+                // Skip if we still don't have proper context
+                if (currentTurnNodeId == null || currentPhaseNodeId == null) {
+                    System.err.println("Priority event without proper game context");
+                    return;
+                }
+
+                Player turn_holder = event.turn;
+                Player priority_holder = event.priority;
+                priorityPassCount++;
+
+                // Create Priority node
+                String newPriorityNodeId = createPriorityNode(
+                        priority_holder.getName(),  // Use event.priority.getName()
+                        event.turn.getName(),      // The player whose turn it is
+                        event.phase.toString(),
+                        event.phase.nameForUi,
+                        game.getPhaseHandler().getTurn(),
+                        priorityPassCount,
+                        game.getStack().size()
+                );
+
+                // Link to previous priority if exists
+                if (currentPriorityNodeId != null) {
+                    linkPriorityNodes(currentPriorityNodeId, newPriorityNodeId);
+                }
+
+                currentPriorityNodeId = newPriorityNodeId;
+
+                desc.append(String.format(" | Priority: %s | Turn Player: %s | Phase: %s | Stack: %d",
+                        priority_holder.getName(), ph.getPlayerTurn().getName(),
+                        event.phase.nameForUi, game.getStack().size()));
+
+                handleEvent("PRIORITY_CHANGED", String.valueOf(desc));
+
+            } catch (Exception e) {
+                System.err.println("Error handling priority: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         @Subscribe
@@ -553,10 +719,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerRadiation", desc.toString());
+            //handleEvent("GameEventPlayerRadiation", desc.toString());
         }
 
         @Subscribe
@@ -564,10 +730,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerShardsChanged", desc.toString());
+            //handleEvent("GameEventPlayerShardsChanged", desc.toString());
         }
 
         @Subscribe
@@ -575,10 +741,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventPlayerStatsChanged", desc.toString());
+            //handleEvent("GameEventPlayerStatsChanged", desc.toString());
         }
 
         @Subscribe
@@ -586,10 +752,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventRandomLog", desc.toString());
+            //handleEvent("GameEventRandomLog", desc.toString());
         }
 
         @Subscribe
@@ -597,10 +763,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventRollDie", desc.toString());
+            //handleEvent("GameEventRollDie", desc.toString());
         }
 
         @Subscribe
@@ -608,10 +774,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventShuffle", desc.toString());
+            //handleEvent("GameEventShuffle", desc.toString());
         }
 
         @Subscribe
@@ -619,10 +785,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSpeedChanged", desc.toString());
+            //handleEvent("GameEventSpeedChanged", desc.toString());
         }
 
         @Subscribe
@@ -630,10 +796,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventScry", desc.toString());
+            //handleEvent("GameEventScry", desc.toString());
         }
 
         @Subscribe
@@ -641,10 +807,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSpellRemovedFromStack", desc.toString());
+            //handleEvent("GameEventSpellRemovedFromStack", desc.toString());
         }
 
         @Subscribe
@@ -652,10 +818,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSprocketUpdate", desc.toString());
+            //handleEvent("GameEventSprocketUpdate", desc.toString());
         }
 
         @Subscribe
@@ -663,10 +829,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSubgameEnd", desc.toString());
+            //handleEvent("GameEventSubgameEnd", desc.toString());
         }
 
         @Subscribe
@@ -674,10 +840,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSubgameStart", desc.toString());
+            //handleEvent("GameEventSubgameStart", desc.toString());
         }
 
         @Subscribe
@@ -685,10 +851,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventSurveil", desc.toString());
+            //handleEvent("GameEventSurveil", desc.toString());
         }
 
         @Subscribe
@@ -696,10 +862,10 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventTokenCreated", desc.toString());
+            //handleEvent("GameEventTokenCreated", desc.toString());
         }
 
         @Subscribe
@@ -707,136 +873,45 @@ public class GameStateTracker {
             StringBuilder desc = new StringBuilder();
 
             PhaseHandler ph = game.getPhaseHandler();
-            desc.append(" | Phase: ").append(ph.getPhase());
             desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
 
-            handleEvent("GameEventZone", desc.toString());
+            //handleEvent("GameEventZone", desc.toString());
         }
 
+        // Updated onLandPlayed to create Action node
+        @Subscribe
+        public void onLandPlayed(GameEventLandPlayed event) {
+            Map<String, Object> actionDetails = new HashMap<>();
+            actionDetails.put("landName", event.land.getName());
+            actionDetails.put("controller", event.player.getName());
+            actionDetails.put("cardId", event.land.getId());
 
-
-//        // Generic handler for any event not specifically handled
-//        @Subscribe
-//        public void onGenericEvent(GameEvent event) {
-//            StringBuilder desc = new StringBuilder();
-//
-//            PhaseHandler ph = game.getPhaseHandler();
-//            desc.append(" | Phase: ").append(ph.getPhase());
-//            desc.append(" | Turn: ").append(ph.getTurn());
-//
-//            handleEvent("onGenericEvent", desc.toString());
-//        }
-    }
-
-    // Helper method to get defender name (reused from combat state)
-    private String getDefenderName(GameEntity defender) {
-        if (defender instanceof Player) {
-            Player p = (Player) defender;
-            return p.getName() + " (Player, Life: " + p.getLife() + ")";
-        } else if (defender instanceof Card) {
-            Card c = (Card) defender;
-            String name = c.getName() + " [" + c.getId() + "]";
-            if (c.isPlaneswalker()) {
-                name += " (PW, Loyalty: " + c.getCounters(CounterType.get(CounterEnumType.LOYALTY)) + ")";
+            // Add land type information if available
+            if (event.land.isBasicLand()) {
+                actionDetails.put("isBasicLand", true);
             }
-            return name;
-        }
-        return defender.toString();
-    }
-
-
-
-    /**
-     * Track zone changes that have state-based implications
-     */
-    private void trackZoneChangeEffects(Card card, ZoneType from, ZoneType to,
-                                        Player fromPlayer, Player toPlayer) {
-        // Track graveyard entries for "died this turn" effects
-        if (to == ZoneType.Graveyard && from == ZoneType.Battlefield) {
-            // This is a "dies" event - useful for tracking death triggers
-            if (toPlayer != null) {
-                // You could maintain a list of cards that died this turn
-                // cardsAddedThisTurn is already tracked in Zone class
+            if (event.land.getType() != null) {
+                actionDetails.put("landTypes", event.land.getType().toString());
             }
+
+            recordPriorityAction("play_land", actionDetails);
+
+            // Create an Action node for this land play
+            createActionNode("play_land", actionDetails);
+
+            // Also handle as a regular event
+            StringBuilder desc = new StringBuilder();
+            desc.append(event.player.getName());
+            desc.append(" played ");
+            desc.append(event.land.getName());
+            PhaseHandler ph = game.getPhaseHandler();
+            desc.append(" | Turn: ").append(ph.getTurn());
+            desc.append(" | Phase: ").append(ph.getPhase());
+
+            handleEvent("LAND_PLAYED", desc.toString());
         }
 
-        // Track exile movements for processors, adventures, etc.
-        if (to == ZoneType.Exile) {
-            // Track face-up/face-down exile status if needed
-            // card.isFaceDown() can be checked here
-        }
-
-        // Track command zone movements
-        if (from == ZoneType.Command || to == ZoneType.Command) {
-            // Important for commander damage, companion rules, etc.
-        }
-
-        // Track stack movements for storm count, cast triggers
-        if (to == ZoneType.Stack) {
-            // This indicates a spell being cast
-        }
-    }
-
-    /**
-     * Determine if card details should be revealed based on zones and players
-     */
-    private boolean shouldRevealCardDetails(Card card, ZoneType from, ZoneType to,
-                                            Player fromPlayer, Player toPlayer) {
-        // Always reveal public zone changes
-        if (!isHiddenZone(from) && !isHiddenZone(to)) {
-            return true;
-        }
-
-        // Check player-specific hidden state logging settings
-        if (fromPlayer != null && shouldShowHiddenInfo(fromPlayer.getName())) {
-            return true;
-        }
-        if (toPlayer != null && shouldShowHiddenInfo(toPlayer.getName())) {
-            return true;
-        }
-
-        // Special cases where hidden info becomes public
-        if (from == ZoneType.Library && to != ZoneType.Hand) {
-            // Library to anywhere except hand is usually revealed
-            return true;
-        }
-
-        // Cards revealed from hand
-        if (from == ZoneType.Hand && (to == ZoneType.Stack || to == ZoneType.Battlefield)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Create sanitized description for hidden zone changes
-     */
-    private String createSanitizedDescription(ZoneType from, ZoneType to,
-                                              Player fromPlayer, Player toPlayer) {
-        StringBuilder desc = new StringBuilder("A card moved from ");
-
-        if (from != null) {
-            desc.append(from);
-            if (fromPlayer != null) {
-                desc.append(" (").append(fromPlayer.getName()).append(")");
-            }
-        } else {
-            desc.append("outside the game");
-        }
-
-        desc.append(" to ");
-
-        if (to != null) {
-            desc.append(to);
-            if (toPlayer != null) {
-                desc.append(" (").append(toPlayer.getName()).append(")");
-            }
-        } else {
-            desc.append("outside the game");
-        }
-
-        return desc.toString();
     }
 
 
@@ -858,16 +933,16 @@ public class GameStateTracker {
     private void initializeGameInNeo4j() {
         Map<String, Object> result = neo4j.writeTransaction(tx -> {
             String query = """
-            CREATE (g:Game {
-                id: $gameId,
-                timestamp: $timestamp,
-                players: $players
-            })
-            RETURN g.id as gameId
-            """;
+        CREATE (g:Game {
+            id: $gameId,
+            timestamp: $timestamp,
+            players: $players
+        })
+        RETURN g.id as gameId
+        """;
 
             Map<String, Object> params = Map.of(
-                    "gameId", String.valueOf(game.getId()), // Convert to String here
+                    "gameId", String.valueOf(game.getId()),
                     "timestamp", System.currentTimeMillis(),
                     "players", game.getPlayers().stream()
                             .map(Player::getName)
@@ -877,51 +952,49 @@ public class GameStateTracker {
             return tx.run(query, params).single().asMap();
         });
 
-        this.gameNodeId = (String) result.get("gameId"); // Now this will work
-
-        // Create player nodes
+        this.gameNodeId = (String) result.get("gameId");
         createPlayerNodes();
     }
 
     private void createPlayerNodes() {
         neo4j.writeTransaction(tx -> {
             for (Player p : game.getPlayers()) {
-                String query = """
-                MATCH (g:Game {id: $gameId})
-                CREATE (p:Player {
-                    name: $name,
-                    gameId: $gameId,
-                    startingLife: $startingLife,
-                    isAI: $isAI
-                })
-                CREATE (g)-[:HAS_PLAYER]->(p)
+                // First MERGE the player node (global across games)
+                String mergePlayerQuery = """
+                MERGE (p:Player {name: $name})
+                ON CREATE SET 
+                    p.isAI = $isAI,
+                    p.firstSeen = $firstSeen,
+                    p.gamesPlayed = 1
+                ON MATCH SET 
+                    p.gamesPlayed = COALESCE(p.gamesPlayed, 0) + 1
                 """;
 
-                Map<String, Object> params = Map.of(
-                        "gameId", gameNodeId, // This is already a String now
+                tx.run(mergePlayerQuery, Map.of(
+                        "name", p.getName(),
+                        "isAI", p.getController().isAI(),
+                        "firstSeen", System.currentTimeMillis()
+                ));
+
+                // Create relationship between Game and Player with game-specific data
+                String linkQuery = """
+                MATCH (g:Game {id: $gameId})
+                MATCH (p:Player {name: $name})
+                CREATE (g)-[:HAS_PLAYER {
+                    startingLife: $startingLife,
+                    playerIndex: $playerIndex
+                }]->(p)
+                """;
+
+                tx.run(linkQuery, Map.of(
+                        "gameId", gameNodeId,
                         "name", p.getName(),
                         "startingLife", p.getStartingLife(),
-                        "isAI", p.getController().isAI()
-                );
-
-                tx.run(query, params);
+                        "playerIndex", game.getPlayers().indexOf(p)
+                ));
             }
             return null;
         });
-    }
-
-
-    /**
-     * Check if we should show card details for a zone change
-     */
-    private boolean shouldShowCardDetails(String playerName, ZoneType from, ZoneType to) {
-        // Always show public zone changes
-        if (!isHiddenZone(from) && !isHiddenZone(to)) {
-            return true;
-        }
-
-        // Check if we should show this player's hidden info
-        return shouldShowHiddenInfo(playerName);
     }
 
     /**
@@ -939,7 +1012,10 @@ public class GameStateTracker {
         StateInfo.StateDelta delta = computeDelta(previousState, currentState);
 
         // Save to Neo4j
-        saveEventAndStateToNeo4j(eventType, eventDescription, delta, prevStateId);
+        //saveEventAndStateToNeo4j(eventType, eventDescription, delta, prevStateId);
+
+        //Linking turn, phase, priority
+        linkGameStateToHierarchy();
 
         // Log the event (existing functionality)
         logEvent(eventType, eventDescription, delta);
@@ -949,19 +1025,19 @@ public class GameStateTracker {
                                           StateInfo.StateDelta delta, String prevStateId) {
         neo4j.writeTransaction(tx -> {
             // Create GameState node
-            String stateNodeId = createGameStateNode(tx);
+            //String stateNodeId = createGameStateNode(tx);
 
             // Create GameEvent node
             String eventNodeId = createGameEventNode(tx, eventType, eventDescription, delta);
 
             // Create relationships
-            createStateTransitionRelationships(tx, prevStateId, stateNodeId, eventNodeId);
+            //createStateTransitionRelationships(tx, prevStateId, stateNodeId, eventNodeId);
 
             // Update game entities based on delta
             updateGameEntities(tx, delta);
 
             // Store current state ID for next transition
-            currentStateNodeId = stateNodeId;
+            //currentStateNodeId = stateNodeId;
 
             return null;
         });
@@ -1310,23 +1386,23 @@ public class GameStateTracker {
         String stateId = UUID.randomUUID().toString();
 
         String query = """
-        CREATE (s:GameState {
-            id: $stateId,
-            gameId: $gameId,
-            timestamp: $timestamp,
-            eventNumber: $eventNumber,
-            turn: $turn,
-            phase: $phase,
-            activePlayer: $activePlayer,
-            priorityPlayer: $priorityPlayer,
-            stackSize: $stackSize
-        })
-        RETURN s.id as stateId
-        """;
+    CREATE (s:GameState {
+        id: $stateId,
+        gameId: $gameId,
+        timestamp: $timestamp,
+        eventNumber: $eventNumber,
+        turn: $turn,
+        phase: $phase,
+        activePlayer: $activePlayer,
+        priorityPlayer: $priorityPlayer,
+        stackSize: $stackSize
+    })
+    RETURN s.id as stateId
+    """;
 
         Map<String, Object> params = new HashMap<>();
         params.put("stateId", stateId);
-        params.put("gameId", gameNodeId); // gameNodeId is already a String
+        params.put("gameId", gameNodeId);
         params.put("timestamp", System.currentTimeMillis());
         params.put("eventNumber", eventCounter);
         params.put("turn", currentState.turnNumber);
@@ -1348,23 +1424,25 @@ public class GameStateTracker {
         return stateId;
     }
 
+
     private void createPlayerStateNodes(TransactionContext tx, String stateId) {
         for (StateInfo.PlayerState playerState : currentState.players.values()) {
             String query = """
-                MATCH (s:GameState {id: $stateId})
-                MATCH (p:Player {name: $playerName, gameId: $gameId})
-                CREATE (ps:PlayerState {
-                    stateId: $stateId,
-                    playerName: $playerName,
-                    life: $life,
-                    poisonCounters: $poison,
-                    manaPool: $manaPool,
-                    cardsInHand: $handSize,
-                    landsPlayed: $landsPlayed
-                })
-                CREATE (s)-[:HAS_PLAYER_STATE]->(ps)
-                CREATE (ps)-[:STATE_OF]->(p)
-                """;
+        MATCH (s:GameState {id: $stateId})
+        MATCH (g:Game {id: $gameId})
+        MATCH (g)-[:HAS_PLAYER]->(p:Player {name: $playerName})
+        CREATE (ps:PlayerState {
+            stateId: $stateId,
+            playerName: $playerName,
+            life: $life,
+            poisonCounters: $poison,
+            manaPool: $manaPool,
+            cardsInHand: $handSize,
+            landsPlayed: $landsPlayed
+        })
+        CREATE (s)-[:HAS_PLAYER_STATE]->(ps)
+        CREATE (ps)-[:STATE_OF]->(p)
+        """;
 
             Map<String, Object> params = new HashMap<>();
             params.put("stateId", stateId);
@@ -1413,15 +1491,15 @@ public class GameStateTracker {
     private void createZoneNode(TransactionContext tx, String stateId,
                                 String playerName, StateInfo.ZoneState zone) {
         String query = """
-            MATCH (s:GameState {id: $stateId})
-            CREATE (z:Zone {
-                stateId: $stateId,
-                type: $zoneType,
-                owner: $owner,
-                cardCount: $cardCount
-            })
-            CREATE (s)-[:HAS_ZONE]->(z)
-            """;
+    MATCH (s:GameState {id: $stateId})
+    CREATE (z:Zone {
+        stateId: $stateId,
+        type: $zoneType,
+        owner: $owner,
+        cardCount: $cardCount
+    })
+    CREATE (s)-[:HAS_ZONE]->(z)
+    """;
 
         Map<String, Object> params = Map.of(
                 "stateId", stateId,
@@ -1437,24 +1515,24 @@ public class GameStateTracker {
                                  StateInfo.ZoneState zone) {
         for (StateInfo.CardState card : zone.cards) {
             String query = """
-            CREATE (c:Card {
-                stateId: $stateId,
-                cardId: $cardId,
-                name: $name,
-                zone: $zone,
-                controller: $controller,
-                owner: $owner,
-                power: $power,
-                toughness: $toughness,
-                tapped: $tapped,
-                damage: $damage,
-                types: $types,
-                keywords: $keywords
-            })
-            WITH c
-            MATCH (z:Zone {stateId: $stateId, type: $zone, owner: $owner})
-            CREATE (c)-[:IN_ZONE]->(z)
-            """;
+        CREATE (c:Card {
+            stateId: $stateId,
+            cardId: $cardId,
+            name: $name,
+            zone: $zone,
+            controller: $controller,
+            owner: $owner,
+            power: $power,
+            toughness: $toughness,
+            tapped: $tapped,
+            damage: $damage,
+            types: $types,
+            keywords: $keywords
+        })
+        WITH c
+        MATCH (z:Zone {stateId: $stateId, type: $zone, owner: $owner})
+        CREATE (c)-[:IN_ZONE]->(z)
+        """;
 
             Map<String, Object> params = new HashMap<>();
             params.put("stateId", stateId);
@@ -1476,12 +1554,11 @@ public class GameStateTracker {
                 }
             }
             params.put("types", typeStrings);
-
             params.put("keywords", new ArrayList<>(card.keywords));
 
             tx.run(query, params);
 
-            // Create relationships for attachments, blocks, etc.
+            // Create relationships for combat
             if (card.attacking) {
                 createAttackingRelationship(tx, stateId, card);
             }
@@ -1491,21 +1568,38 @@ public class GameStateTracker {
         }
     }
 
+    private void createBlockingRelationships(TransactionContext tx, String stateId,
+                                             StateInfo.CardState blocker) {
+        for (Integer blockedId : blocker.blockingCards) {
+            String query = """
+        MATCH (blocker:Card {stateId: $stateId, cardId: $blockerId})
+        MATCH (attacker:Card {stateId: $stateId, cardId: $attackerId})
+        CREATE (blocker)-[:BLOCKING]->(attacker)
+        """;
+
+            tx.run(query, Map.of(
+                    "stateId", stateId,
+                    "blockerId", blocker.id,
+                    "attackerId", blockedId
+            ));
+        }
+    }
+
     private void createCombatStateNode(TransactionContext tx, String stateId) {
         StateInfo.CombatState combat = currentState.combat;
 
         String query = """
-            MATCH (s:GameState {id: $stateId})
-            CREATE (c:Combat {
-                stateId: $stateId,
-                attackingPlayer: $attackingPlayer,
-                totalAttackers: $totalAttackers,
-                totalDamage: $totalDamage,
-                turn: $turn,
-                combatNumber: $combatNumber
-            })
-            CREATE (s)-[:HAS_COMBAT]->(c)
-            """;
+    MATCH (s:GameState {id: $stateId})
+    CREATE (c:Combat {
+        stateId: $stateId,
+        attackingPlayer: $attackingPlayer,
+        totalAttackers: $totalAttackers,
+        totalDamage: $totalDamage,
+        turn: $turn,
+        combatNumber: $combatNumber
+    })
+    CREATE (s)-[:HAS_COMBAT]->(c)
+    """;
 
         Map<String, Object> params = Map.of(
                 "stateId", stateId,
@@ -1519,22 +1613,23 @@ public class GameStateTracker {
         tx.run(query, params);
     }
 
+    // GameEvent Node Functions
     private String createGameEventNode(TransactionContext tx, String eventType,
                                        String eventDescription, StateInfo.StateDelta delta) {
         String eventId = UUID.randomUUID().toString();
 
         String query = """
-            CREATE (e:GameEvent {
-                id: $eventId,
-                gameId: $gameId,
-                type: $eventType,
-                description: $description,
-                timestamp: $timestamp,
-                eventNumber: $eventNumber,
-                changes: $changes
-            })
-            RETURN e.id as eventId
-            """;
+    CREATE (e:GameEvent {
+        id: $eventId,
+        gameId: $gameId,
+        type: $eventType,
+        description: $description,
+        timestamp: $timestamp,
+        eventNumber: $eventNumber,
+        changes: $changes
+    })
+    RETURN e.id as eventId
+    """;
 
         Map<String, Object> params = Map.of(
                 "eventId", eventId,
@@ -1557,10 +1652,10 @@ public class GameStateTracker {
         if (prevStateId != null) {
             // Link states
             String linkStatesQuery = """
-                MATCH (prev:GameState {id: $prevStateId})
-                MATCH (next:GameState {id: $nextStateId})
-                CREATE (prev)-[:NEXT_STATE]->(next)
-                """;
+        MATCH (prev:GameState {id: $prevStateId})
+        MATCH (next:GameState {id: $nextStateId})
+        CREATE (prev)-[:NEXT_STATE]->(next)
+        """;
 
             tx.run(linkStatesQuery, Map.of(
                     "prevStateId", prevStateId,
@@ -1570,11 +1665,11 @@ public class GameStateTracker {
 
         // Link event to states
         String linkEventQuery = """
-            MATCH (e:GameEvent {id: $eventId})
-            MATCH (s:GameState {id: $stateId})
-            CREATE (e)-[:RESULTED_IN]->(s)
-            CREATE (s)-[:TRIGGERED_BY]->(e)
-            """;
+    MATCH (e:GameEvent {id: $eventId})
+    MATCH (s:GameState {id: $stateId})
+    CREATE (e)-[:RESULTED_IN]->(s)
+    CREATE (s)-[:TRIGGERED_BY]->(e)
+    """;
 
         tx.run(linkEventQuery, Map.of(
                 "eventId", eventId,
@@ -1583,16 +1678,51 @@ public class GameStateTracker {
 
         if (prevStateId != null) {
             String linkEventToPrevQuery = """
-                MATCH (e:GameEvent {id: $eventId})
-                MATCH (prev:GameState {id: $prevStateId})
-                CREATE (prev)-[:CAUSED]->(e)
-                """;
+        MATCH (e:GameEvent {id: $eventId})
+        MATCH (prev:GameState {id: $prevStateId})
+        CREATE (prev)-[:CAUSED]->(e)
+        """;
 
             tx.run(linkEventToPrevQuery, Map.of(
                     "eventId", eventId,
                     "prevStateId", prevStateId
             ));
         }
+    }
+
+    private void linkGameStateToHierarchy() {
+        if (currentStateNodeId == null) return;
+
+        neo4j.writeTransaction(tx -> {
+            // Link to Turn
+            if (currentTurnNodeId != null) {
+                tx.run("""
+            MATCH (s:GameState {id: $stateId})
+            MATCH (t:Turn {id: $turnId})
+            CREATE (s)-[:DURING_TURN]->(t)
+            """, Map.of("stateId", currentStateNodeId, "turnId", currentTurnNodeId));
+            }
+
+            // Link to Phase
+            if (currentPhaseNodeId != null) {
+                tx.run("""
+            MATCH (s:GameState {id: $stateId})
+            MATCH (p:Phase {id: $phaseId})
+            CREATE (s)-[:DURING_PHASE]->(p)
+            """, Map.of("stateId", currentStateNodeId, "phaseId", currentPhaseNodeId));
+            }
+
+            // Link to Priority
+            if (currentPriorityNodeId != null) {
+                tx.run("""
+            MATCH (s:GameState {id: $stateId})
+            MATCH (pr:Priority {id: $priorityId})
+            CREATE (s)-[:AT_PRIORITY]->(pr)
+            """, Map.of("stateId", currentStateNodeId, "priorityId", currentPriorityNodeId));
+            }
+
+            return null;
+        });
     }
 
     private void updateGameEntities(TransactionContext tx, StateInfo.StateDelta delta) {
@@ -1635,23 +1765,6 @@ public class GameStateTracker {
         }
     }
 
-    private void createBlockingRelationships(TransactionContext tx, String stateId,
-                                             StateInfo.CardState blocker) {
-        for (Integer blockedId : blocker.blockingCards) {
-            String query = """
-                MATCH (blocker:Card {stateId: $stateId, cardId: $blockerId})
-                MATCH (attacker:Card {stateId: $stateId, cardId: $attackerId})
-                CREATE (blocker)-[:BLOCKING]->(attacker)
-                """;
-
-            tx.run(query, Map.of(
-                    "stateId", stateId,
-                    "blockerId", blocker.id,
-                    "attackerId", blockedId
-            ));
-        }
-    }
-
     // Implement update methods for specific change types
     private void updateLifeTotals(TransactionContext tx, List<String> changes) {
         // Parse life changes and update player nodes
@@ -1671,4 +1784,390 @@ public class GameStateTracker {
     private void updateCombatInfo(TransactionContext tx, List<String> changes) {
         // Update combat-related information
     }
+
+    private String createTurnNode(int turnNumber, String activePlayer) {
+        return neo4j.writeTransaction(tx -> {
+            String turnId = String.format("%s-turn-%d", gameNodeId, turnNumber);
+
+            String query = """
+            MATCH (g:Game {id: $gameId})
+            CREATE (t:Turn {
+                id: $turnId,
+                gameId: $gameId,
+                turnNumber: $turnNumber,
+                activePlayer: $activePlayer,
+                startTime: $startTime,
+                phaseCount: 0,
+                priorityPassCount: 0,
+                spellsCast: 0,
+                damageDealt: 0
+            })
+            CREATE (g)-[:HAS_TURN]->(t)
+            WITH t, g
+            OPTIONAL MATCH (g)-[:HAS_TURN]->(prevTurn:Turn)
+            WHERE prevTurn.turnNumber = $turnNumber - 1
+              AND prevTurn.gameId = $gameId  // IMPORTANT: Scope to current game
+            WITH t, prevTurn
+            ORDER BY prevTurn.turnNumber DESC
+            LIMIT 1
+            FOREACH (pt IN CASE WHEN prevTurn IS NOT NULL THEN [prevTurn] ELSE [] END |
+                CREATE (pt)-[:NEXT_TURN]->(t)
+            )
+            RETURN t.id as turnId
+            """;
+
+            Map<String, Object> params = Map.of(
+                    "gameId", gameNodeId,
+                    "turnId", turnId,
+                    "turnNumber", turnNumber,
+                    "activePlayer", activePlayer,
+                    "startTime", System.currentTimeMillis()
+            );
+
+            return tx.run(query, params).single().get("turnId").asString();
+        });
+    }
+
+    private String createPhaseNode(String phaseType, String phaseName, String description,
+                                   int turnNumber, int phaseNumber, String activePlayer) {
+        return neo4j.writeTransaction(tx -> {
+            String normalizedPhaseType = phaseType.toLowerCase().replace(" ", "_");
+            String phaseId = String.format("%s-turn-%d-phase-%s-%d",
+                    gameNodeId, turnNumber, normalizedPhaseType, phaseNumber);
+
+            String query = """
+            MATCH (t:Turn {id: $turnId})
+            WHERE t.gameId = $gameId  // Ensure we're in the right game
+            CREATE (p:Phase {
+                id: $phaseId,
+                gameId: $gameId,
+                turnNumber: $turnNumber,
+                phaseNumber: $phaseNumber,
+                phaseType: $phaseType,
+                phaseName: $phaseName,
+                phaseDescription: $phaseDesc,
+                activePlayer: $activePlayer,
+                startTime: $startTime,
+                priorityExchanges: 0,
+                actionsPerformed: 0
+            })
+            CREATE (t)-[:HAS_PHASE]->(p)
+            WITH p, t
+            OPTIONAL MATCH (t)-[:HAS_PHASE]->(prevPhase:Phase)
+            WHERE prevPhase.phaseNumber = $phaseNumber - 1
+              AND prevPhase.gameId = $gameId  // IMPORTANT: Scope to current game
+            WITH p, t, prevPhase
+            ORDER BY prevPhase.phaseNumber DESC
+            LIMIT 1
+            FOREACH (pp IN CASE WHEN prevPhase IS NOT NULL THEN [prevPhase] ELSE [] END |
+                CREATE (pp)-[:NEXT_PHASE]->(p)
+            )
+            SET t.phaseCount = t.phaseCount + 1
+            RETURN p.id as phaseId
+            """;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("gameId", gameNodeId);
+            params.put("turnId", currentTurnNodeId);
+            params.put("phaseId", phaseId);
+            params.put("phaseType", phaseType);
+            params.put("phaseName", phaseName);
+            params.put("phaseDesc", description);
+            params.put("turnNumber", turnNumber);
+            params.put("phaseNumber", phaseNumber);
+            params.put("activePlayer", activePlayer);
+            params.put("startTime", System.currentTimeMillis());
+
+            var result = tx.run(query, params).single();
+            return result.get("phaseId").asString();
+        });
+    }
+
+    private String createPriorityNode(String priorityHolder, String turnPlayer,
+                                      String phaseType, String phaseNameUI,
+                                      int turnNumber, int priorityNumber, int stackSize) {
+        return neo4j.writeTransaction(tx -> {
+            String normalizedPhaseType = phaseType.toLowerCase().replace(" ", "_");
+            String priorityId = String.format("%s-turn-%d-phase-%s-priority-%d",
+                    gameNodeId, turnNumber, normalizedPhaseType, priorityNumber);
+
+            String query = """
+            MATCH (p:Phase {id: $phaseId})
+            WHERE p.gameId = $gameId  // Ensure we're in the right game
+            CREATE (pr:Priority {
+                id: $priorityId,
+                gameId: $gameId,
+                priorityHolder: $priorityHolder,
+                turnPlayer: $turnPlayer,
+                phaseType: $phaseType,
+                phaseName: $phaseName,
+                priorityNumber: $priorityNumber,
+                stackSize: $stackSize,
+                timestamp: $timestamp,
+                actionTaken: false,
+                passedPriority: true
+            })
+            CREATE (p)-[:HAS_PRIORITY_PASS]->(pr)
+            SET p.priorityExchanges = p.priorityExchanges + 1
+            WITH pr
+            MATCH (t:Turn {id: $turnId})
+            WHERE t.gameId = $gameId  // Ensure we're in the right game
+            SET t.priorityPassCount = t.priorityPassCount + 1
+            RETURN pr.id as priorityId
+            """;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("gameId", gameNodeId);
+            params.put("phaseId", currentPhaseNodeId);
+            params.put("turnId", currentTurnNodeId);
+            params.put("priorityId", priorityId);
+            params.put("priorityHolder", priorityHolder);
+            params.put("turnPlayer", turnPlayer);
+            params.put("phaseType", phaseType);
+            params.put("phaseName", phaseNameUI);
+            params.put("priorityNumber", priorityNumber);
+            params.put("stackSize", stackSize);
+            params.put("timestamp", System.currentTimeMillis());
+
+            var result = tx.run(query, params).single();
+            return result.get("priorityId").asString();
+        });
+    }
+
+    private void updatePriorityNodeWithAction(org.neo4j.driver.TransactionContext tx, String priorityId, String action, Map<String, Object> actionDetails) {
+        // Add null check
+        if (priorityId == null) {
+            System.err.println("WARNING: Attempting to update null priorityId with action: " + action);
+            return;
+        }
+
+        try {
+            String actionDetailsJson = mapToJsonString(actionDetails);
+
+            // First check if the Priority node exists
+            String checkQuery = "MATCH (pr:Priority {id: $priorityId}) RETURN pr.id as id";
+            var checkResult = tx.run(checkQuery, Map.of("priorityId", priorityId));
+
+            if (!checkResult.hasNext()) {
+                System.err.println("WARNING: Priority node not found: " + priorityId);
+                return;
+            }
+
+            // Use OPTIONAL MATCH for the Phase relationship to prevent failure
+            String query = """
+        MATCH (pr:Priority {id: $priorityId})
+        SET pr.actionTaken = true,
+            pr.passedPriority = false,
+            pr.action = $action,
+            pr.actionDetailsJson = $actionDetailsJson
+        WITH pr
+        OPTIONAL MATCH (p:Phase)-[:HAS_PRIORITY_PASS]->(pr)
+        WHERE p IS NOT NULL
+        SET p.actionsPerformed = COALESCE(p.actionsPerformed, 0) + 1
+        RETURN pr.id as updatedId
+        """;
+
+            var result = tx.run(query, Map.of(
+                    "priorityId", priorityId,
+                    "action", action,
+                    "actionDetailsJson", actionDetailsJson
+            ));
+
+            if (result.hasNext()) {
+                System.out.println("Successfully updated priority node: " + priorityId + " with action: " + action);
+            } else {
+                System.err.println("Failed to update priority node: " + priorityId);
+            }
+
+        } catch (Exception e) {
+            System.err.println("Error updating priority node: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void linkPriorityNodes(String fromPriorityId, String toPriorityId) {
+        neo4j.writeTransaction(tx -> {
+            String query = """
+            MATCH (from:Priority {id: $fromId})
+            MATCH (to:Priority {id: $toId})
+            CREATE (from)-[:PASSED_TO]->(to)
+            """;
+
+            tx.run(query, Map.of(
+                    "fromId", fromPriorityId,
+                    "toId", toPriorityId
+            ));
+
+            return null;
+        });
+    }
+
+    private void updateTurnNodeOnEnd(String turnId) {
+        neo4j.writeTransaction(tx -> {
+            String query = """
+        MATCH (t:Turn {id: $turnId})
+        SET t.endTime = $endTime,
+            t.duration = $endTime - t.startTime
+        WITH t
+        OPTIONAL MATCH (t)-[:HAS_PHASE]->(p:Phase)
+        WITH t, count(p) as finalPhaseCount
+        SET t.phaseCount = finalPhaseCount
+        """;
+
+            tx.run(query, Map.of(
+                    "turnId", turnId,
+                    "endTime", System.currentTimeMillis()
+            ));
+
+            return null;
+        });
+    }
+
+    // Additional helper methods for tracking actions during priority
+    public void recordPriorityAction(String action, Map<String, Object> actionDetails) {
+        if (currentPriorityNodeId == null) {
+            System.err.println("WARNING: No current priority node to record action: " + action);
+            // Optionally, you could create a priority node here if needed
+            return;
+        }
+
+        neo4j.writeTransaction(tx -> {
+            try {
+                // Check if the phase and turn nodes exist
+                if (currentPhaseNodeId == null || currentTurnNodeId == null) {
+                    System.err.println("WARNING: Missing phase or turn node for action: " + action);
+                    return null;
+                }
+
+                // Convert the Map to individual properties or JSON string
+                String query = """
+                MATCH (pr:Priority {id: $priorityId})
+                SET pr.actionTaken = true,
+                    pr.passedPriority = false,
+                    pr.action = $action,
+                    pr.actionDetailsJson = $actionDetailsJson
+                WITH pr
+                OPTIONAL MATCH (p:Phase {id: $phaseId})
+                WHERE p IS NOT NULL
+                SET p.actionsPerformed = COALESCE(p.actionsPerformed, 0) + 1
+                WITH p
+                OPTIONAL MATCH (t:Turn {id: $turnId})
+                WHERE t IS NOT NULL AND $action CONTAINS 'cast'
+                SET t.spellsCast = COALESCE(t.spellsCast, 0) + 1
+                """;
+
+                String actionDetailsJson = mapToJsonString(actionDetails);
+
+                Map<String, Object> params = Map.of(
+                        "priorityId", currentPriorityNodeId,
+                        "phaseId", currentPhaseNodeId,
+                        "turnId", currentTurnNodeId,
+                        "action", action,
+                        "actionDetailsJson", actionDetailsJson
+                );
+
+                tx.run(query, params);
+
+            } catch (Exception e) {
+                System.err.println("Error recording priority action: " + e.getMessage());
+                e.printStackTrace();
+            }
+
+            return null;
+        });
+    }
+
+    // Helper method to convert Map to JSON string
+    private String mapToJsonString(Map<String, Object> map) {
+        StringBuilder json = new StringBuilder("{");
+        boolean first = true;
+
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            if (!first) json.append(",");
+            first = false;
+
+            json.append("\"").append(entry.getKey()).append("\":");
+
+            Object value = entry.getValue();
+            if (value instanceof String) {
+                json.append("\"").append(value.toString().replace("\"", "\\\"")).append("\"");
+            } else if (value instanceof Number || value instanceof Boolean) {
+                json.append(value);
+            } else {
+                json.append("\"").append(value.toString().replace("\"", "\\\"")).append("\"");
+            }
+        }
+
+        json.append("}");
+        return json.toString();
+    }
+
+    // Track ability activations
+    public void recordAbilityActivation(SpellAbility ability) {
+        Map<String, Object> actionDetails = new HashMap<>();
+        actionDetails.put("abilityDesc", ability.getDescription());
+        actionDetails.put("source", ability.getHostCard().getName());
+        actionDetails.put("controller", ability.getActivatingPlayer().getName());
+        actionDetails.put("manaCost", ability.getPayCosts().getTotalMana().toString());
+
+        recordPriorityAction("activate_ability", actionDetails);
+    }
+
+    // Updated createActionNode to track land plays in turn statistics
+    private void createActionNode(String actionType, Map<String, Object> details) {
+        neo4j.writeTransaction(tx -> {
+            String actionId = UUID.randomUUID().toString();
+            String detailsJson = mapToJsonString(details);
+
+            String query = """
+            MATCH (pr:Priority {id: $priorityId})
+            CREATE (a:Action {
+                id: $actionId,
+                type: $actionType,
+                timestamp: $timestamp,
+                detailsJson: $detailsJson
+            })
+            CREATE (pr)-[:PERFORMED]->(a)
+            WITH a
+            MATCH (p:Phase {id: $phaseId})
+            CREATE (a)-[:DURING_PHASE]->(p)
+            WITH a
+            MATCH (t:Turn {id: $turnId})
+            CREATE (a)-[:DURING_TURN]->(t)
+            
+            // Update turn statistics if relevant
+            WITH a, t
+            WHERE $actionType IN ['cast_spell', 'activate_ability']
+            SET t.spellsCast = t.spellsCast + 1
+            
+            WITH a, t
+            WHERE $actionType = 'deal_damage' AND $damageAmount IS NOT NULL
+            SET t.damageDealt = t.damageDealt + $damageAmount
+            
+            // Track land plays
+            WITH a, t
+            WHERE $actionType = 'play_land'
+            SET t.landsPlayed = COALESCE(t.landsPlayed, 0) + 1
+            """;
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("actionId", actionId);
+            params.put("priorityId", currentPriorityNodeId);
+            params.put("phaseId", currentPhaseNodeId);
+            params.put("turnId", currentTurnNodeId);
+            params.put("actionType", actionType);
+            params.put("timestamp", System.currentTimeMillis());
+            params.put("detailsJson", detailsJson);
+            params.put("damageAmount", details.getOrDefault("damageAmount", 0));
+
+            tx.run(query, params);
+
+            // Pass the transaction to updatePriorityNodeWithAction
+            updatePriorityNodeWithAction(tx, currentPriorityNodeId, actionType, details);
+
+            return null;
+        });
+    }
+
+
 }
