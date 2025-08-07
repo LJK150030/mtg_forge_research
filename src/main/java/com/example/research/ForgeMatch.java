@@ -50,9 +50,8 @@ public class ForgeMatch {
             // Step 1: Create AI Players
             output.println("👥 Creating AI players...");
 
-            // Use the ForgePlayerAI pattern from your codebase
-            ForgePlayerAI aiPlayer1 = new ForgePlayerAI("Player 1", false);
-            ForgePlayerAI aiPlayer2 = new ForgePlayerAI("Player 2", false);
+            ForgePlayerAI  aiPlayer1 = ForgePlayerAI.Factory.createWithSimulation("Player 1");
+            ForgePlayerAI  aiPlayer2 = ForgePlayerAI.Factory.createWithSimulation("Player 2");
 
             // Step 2: Create RegisteredPlayers with decks
             RegisteredPlayer regPlayer1 = new RegisteredPlayer(deck1);

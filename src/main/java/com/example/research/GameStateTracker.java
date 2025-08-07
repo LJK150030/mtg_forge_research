@@ -111,6 +111,9 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Game_Started", String.valueOf(desc), null);
             //handleEvent("GameEventGameStarted", desc.toString());
         }
 
@@ -134,7 +137,7 @@ public class GameStateTracker {
             desc.append(String.format(" | Turn %d began | Turn Owner: %s",
                     event.turnNumber, event.turnOwner.getName()));
 
-            handleEvent("TURN_BEGAN", String.valueOf(desc));
+            handleEvent("Turn_Began", String.valueOf(desc));
         }
 
         @Subscribe
@@ -151,7 +154,7 @@ public class GameStateTracker {
             desc.append(String.format(" | Turn %d ended | Active Player: %s",
                     ph.getTurn(), ph.getPlayerTurn().getName()));
 
-            handleEvent("TURN_ENDED", String.valueOf(desc));
+            handleEvent("Turn_Ended", String.valueOf(desc));
         }
 
         @Subscribe
@@ -197,7 +200,7 @@ public class GameStateTracker {
                 desc.append(String.format(" | Phase changed to %s (%s) | Player: %s",
                         event.phase.nameForUi, event.phaseDesc, event.playerTurn.getName()));
 
-                handleEvent("PHASE_CHANGED", String.valueOf(desc));
+                handleEvent("Turn_Phase", String.valueOf(desc));
 
             } catch (Exception e) {
                 System.err.println("Error handling phase change: " + e.getMessage());
@@ -213,6 +216,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Change_Zone", String.valueOf(desc), null);
             //handleEvent("GameEventCardChangeZone", desc.toString());
         }
 
@@ -224,6 +229,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Tapped", String.valueOf(desc), null);
             //handleEvent("GameEventCardTapped", desc.toString());
         }
 
@@ -295,6 +302,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Spell_Resolved", String.valueOf(desc), null);
             //handleEvent("GameEventSpellResolved", desc.toString());
         }
 
@@ -306,6 +315,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Attackers_Declared", String.valueOf(desc), null);
             //handleEvent("GameEventAttackersDeclared", desc.toString());
         }
 
@@ -317,6 +328,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Blockers_Declared", String.valueOf(desc), null);
             //handleEvent("GameEventBlockersDeclared", desc.toString());
         }
 
@@ -328,6 +341,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Combat_Ended", String.valueOf(desc), null);
             //handleEvent("GameEventCombatEnded", desc.toString());
         }
 
@@ -339,6 +354,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Lives_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerLivesChanged", desc.toString());
         }
 
@@ -350,6 +367,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Damaged", String.valueOf(desc), null);
             //handleEvent("GameEventCardDamaged", desc.toString());
         }
 
@@ -361,6 +380,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Destroyed", String.valueOf(desc), null);
             //handleEvent("GameEventCardDestroyed", desc.toString());
         }
 
@@ -372,6 +393,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Mana_Pool", String.valueOf(desc), null);
             //handleEvent("GameEventManaPool", desc.toString());
         }
 
@@ -383,6 +406,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Counters", String.valueOf(desc), null);
             //handleEvent("GameEventCardCounters", desc.toString());
         }
 
@@ -394,6 +419,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Counters", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerCounters", desc.toString());
         }
 
@@ -405,6 +432,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Game_Finished", String.valueOf(desc), null);
             //handleEvent("GameEventGameFinished", desc.toString());
         }
 
@@ -416,6 +445,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Game_Outcome", String.valueOf(desc), null);
             //handleEvent("GameEventGameOutcome", desc.toString());
         }
 
@@ -430,6 +461,8 @@ public class GameStateTracker {
 //            desc.append(" | Phase: ").append(ph.getPhase());
 //            desc.append(" | Turn: ").append(ph.getTurn());
 //
+//            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+//            logEvent("Ante_Cards_Selected", String.valueOf(desc), null);
 //            //handleEvent("GameEventAnteCardsSelected", desc.toString());
         }
 
@@ -441,6 +474,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Attachment", String.valueOf(desc), null);
             //handleEvent("GameEventCardAttachment", desc.toString());
         }
 
@@ -452,6 +487,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Foretold", String.valueOf(desc), null);
             //handleEvent("GameEventCardForetold", desc.toString());
         }
 
@@ -463,6 +500,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Mode_Chosen", String.valueOf(desc), null);
             //handleEvent("GameEventCardModeChosen", desc.toString());
         }
 
@@ -474,6 +513,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Phased", String.valueOf(desc), null);
             //handleEvent("GameEventCardPhased", desc.toString());
         }
 
@@ -485,6 +526,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Plotted", String.valueOf(desc), null);
             //handleEvent("GameEventCardPlotted", desc.toString());
         }
 
@@ -496,6 +539,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Regenerated", String.valueOf(desc), null);
             //handleEvent("GameEventCardRegenerated", desc.toString());
         }
 
@@ -507,6 +552,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Sacrificed", String.valueOf(desc), null);
             //handleEvent("GameEventCardSacrificed", desc.toString());
         }
 
@@ -518,6 +565,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Card_Stats_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventCardStatsChanged", desc.toString());
         }
 
@@ -529,6 +578,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Combat_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventCombatChanged", desc.toString());
         }
 
@@ -540,6 +591,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Combat_Update", String.valueOf(desc), null);
             //handleEvent("GameEventCombatUpdate", desc.toString());
         }
 
@@ -551,6 +604,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Time_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventDayTimeChanged", desc.toString());
         }
 
@@ -562,6 +617,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Door_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventDoorChanged", desc.toString());
         }
 
@@ -573,6 +630,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Flip_Coin", String.valueOf(desc), null);
             //handleEvent("GameEventFlipCoin", desc.toString());
         }
 
@@ -584,6 +643,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Game_Restarted", String.valueOf(desc), null);
             //handleEvent("GameEventGameRestarted", desc.toString());
         }
 
@@ -595,6 +656,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Mana_Burn", String.valueOf(desc), null);
             //handleEvent("GameEventManaBurn", desc.toString());
         }
 
@@ -606,6 +669,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Mulligan", String.valueOf(desc), null);
             //handleEvent("GameEventMulligan", desc.toString());
         }
 
@@ -617,6 +682,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Control", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerControl", desc.toString());
         }
 
@@ -628,6 +695,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Damaged", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerDamaged", desc.toString());
         }
 
@@ -639,6 +708,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Poisoned", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerPoisoned", desc.toString());
         }
 
@@ -722,6 +793,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Radiation", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerRadiation", desc.toString());
         }
 
@@ -733,6 +806,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Shards_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerShardsChanged", desc.toString());
         }
 
@@ -744,6 +819,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Player_Stats_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventPlayerStatsChanged", desc.toString());
         }
 
@@ -755,6 +832,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Random_Log", String.valueOf(desc), null);
             //handleEvent("GameEventRandomLog", desc.toString());
         }
 
@@ -766,6 +845,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Roll_Die", String.valueOf(desc), null);
             //handleEvent("GameEventRollDie", desc.toString());
         }
 
@@ -777,6 +858,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Shuffle", String.valueOf(desc), null);
             //handleEvent("GameEventShuffle", desc.toString());
         }
 
@@ -788,6 +871,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Speed_Changed", String.valueOf(desc), null);
             //handleEvent("GameEventSpeedChanged", desc.toString());
         }
 
@@ -799,6 +884,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Scry", String.valueOf(desc), null);
             //handleEvent("GameEventScry", desc.toString());
         }
 
@@ -810,6 +897,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Spell_Removed_From_Stack", String.valueOf(desc), null);
             //handleEvent("GameEventSpellRemovedFromStack", desc.toString());
         }
 
@@ -821,6 +910,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Sprocket_Update", String.valueOf(desc), null);
             //handleEvent("GameEventSprocketUpdate", desc.toString());
         }
 
@@ -832,6 +923,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Subgame_End", String.valueOf(desc), null);
             //handleEvent("GameEventSubgameEnd", desc.toString());
         }
 
@@ -843,6 +936,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Subgame_Start", String.valueOf(desc), null);
             //handleEvent("GameEventSubgameStart", desc.toString());
         }
 
@@ -854,6 +949,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Surveil", String.valueOf(desc), null);
             //handleEvent("GameEventSurveil", desc.toString());
         }
 
@@ -865,6 +962,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Token_Created", String.valueOf(desc), null);
             //handleEvent("GameEventTokenCreated", desc.toString());
         }
 
@@ -876,6 +975,8 @@ public class GameStateTracker {
             desc.append(" | Turn: ").append(ph.getTurn());
             desc.append(" | Phase: ").append(ph.getPhase());
 
+            desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            logEvent("Zone", String.valueOf(desc), null);
             //handleEvent("GameEventZone", desc.toString());
         }
 
