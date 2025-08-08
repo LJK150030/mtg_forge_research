@@ -394,6 +394,8 @@ public class GameStateTracker {
             desc.append(" | Phase: ").append(ph.getPhase());
 
             desc.append(" | \u001B[31mTODO: implement ").append(event.getClass().getSimpleName()).append("\u001B[0m");
+            desc.append("\n mana: ").append(event.toString());
+
             logEvent("Mana_Pool", String.valueOf(desc), null);
             //handleEvent("GameEventManaPool", desc.toString());
         }
