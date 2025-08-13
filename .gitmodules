@@ -1,3 +1,4 @@
 [submodule "third-party/forge"]
 	path = third-party/forge
 	url = https://github.com/Card-Forge/forge.git
+	branch = master
