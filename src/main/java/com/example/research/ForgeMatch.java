@@ -1,5 +1,7 @@
 package com.example.research;
 
+import APF.ForgeBuilders;
+import APF.KnowledgeBase;
 import forge.ai.PlayerControllerAi;
 import forge.deck.*;
 import forge.game.*;
@@ -36,10 +38,17 @@ public class ForgeMatch {
     private Game game;
     private GameStateTracker stateTracker;  // State tracker instance
     private boolean simulationRunning = true;
+    private KnowledgeBase knowledgeBase;
 
     public ForgeMatch(SimulationConfig config, PrintStream output) {
         this.config = config;
         this.output = output;
+
+        knowledgeBase = KnowledgeBase.getInstance();
+
+        String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
+        ForgeBuilders.CardDefinitionBuilder definitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath);
+        definitionBuilder.buildAllCardDefinitions();
     }
 
     /**
@@ -51,7 +60,10 @@ public class ForgeMatch {
             output.println("👥 Creating AI players...");
 
             ForgePlayerAI  aiPlayer1 = new ForgePlayerAI("Player 1");
+            aiPlayer1.setAiProfile("Default");
+
             ForgePlayerAI  aiPlayer2 = new ForgePlayerAI("Player 2");
+            aiPlayer2.setAiProfile("Gambler");
 
             aiPlayer1.setAllowCheatShuffle(false);
             aiPlayer2.setAllowCheatShuffle(false);
