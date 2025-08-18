@@ -45,10 +45,6 @@ public class ForgeMatch {
         this.output = output;
 
         knowledgeBase = KnowledgeBase.getInstance();
-
-        String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
-        ForgeBuilders.CardDefinitionBuilder definitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath);
-        definitionBuilder.buildAllCardDefinitions();
     }
 
     /**

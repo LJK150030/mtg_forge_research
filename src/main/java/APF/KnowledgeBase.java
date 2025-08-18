@@ -30,6 +30,10 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         this.instances = new ConcurrentHashMap<>();
         this.instancesByClass = new ConcurrentHashMap<>();
         this.eventProcessors = new ArrayList<>();
+
+        String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
+        ForgeBuilders.CardDefinitionBuilder definitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath, this);
+        definitionBuilder.buildAllCardDefinitions();
     }
 
     /**

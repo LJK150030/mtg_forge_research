@@ -29,10 +29,10 @@ public final class ForgeBuilders {
         private final Map<String, NounDefinition> cardDefinitions;
         private final KnowledgeBase knowledgeBase;
 
-        public CardDefinitionBuilder(String cardsfolderPath) {
+        public CardDefinitionBuilder(String cardsfolderPath, KnowledgeBase knowledgeBase) {
             this.cardsfolderPath = Paths.get(cardsfolderPath);
             this.cardDefinitions = new HashMap<>();
-            this.knowledgeBase = KnowledgeBase.getInstance();
+            this.knowledgeBase = knowledgeBase;  // Use the passed instance
         }
 
         /**
