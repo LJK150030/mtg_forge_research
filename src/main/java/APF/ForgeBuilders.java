@@ -260,6 +260,16 @@ public final class ForgeBuilders {
                 }
             }
 
+            if (parsed.types.contains("Planeswalker") && cardData.containsKey("Loyalty")) {
+                String loyalty = cardData.get("Loyalty");
+                builder.addIntProperty(
+                     "loyalty",
+                        Integer.parseInt(loyalty),
+                        0,
+                        1
+                );
+            }
+
             // Keywords - now properly extracts from K: lines
             List<String> keywords = extractKeywords(cardData);
             if (!keywords.isEmpty()) {
@@ -722,6 +732,83 @@ public final class ForgeBuilders {
         }
 
         /**
+         * Extract properties from a Card object to match schema in CardDefinitionBuilder
+         */
+        private Map<String, Object> extractCardProperties(Card card) {
+            Map<String, Object> properties = new HashMap<>();
+
+            // Identity
+            properties.put("name", card.getName());
+
+            // Mana cost and CMC
+            if (card.getManaCost() != null) {
+                properties.put("manaCost", card.getManaCost().toString());
+                properties.put("convertedManaCost", card.getCMC());
+            }
+
+            // Types
+            //List<String> supertypes = new ArrayList<>(card.getType().getSuperTypes());
+            //List<String> types = new ArrayList<>(card.getType().getCardTypes());
+            //List<String> subtypes = new ArrayList<>(card.getType().getSubTypes());
+
+            //if (!supertypes.isEmpty()) properties.put("types.superTypes", supertypes);
+            //if (!types.isEmpty()) properties.put("types.cardTypes", types);
+            //if (!subtypes.isEmpty()) properties.put("types.subTypes", subtypes);
+
+            // Creature-specific
+            if (card.isCreature()) {
+                properties.put("power", String.valueOf(card.getNetPower()));
+                properties.put("toughness", String.valueOf(card.getNetToughness()));
+            }
+
+            // Keywords
+            List<String> keywords = new ArrayList<>();
+            for (KeywordInterface keyword : card.getKeywords()) {
+                keywords.add(keyword.toString());
+            }
+            properties.put("keywords", keywords);
+
+            // Oracle text
+            properties.put("oracleText", card.getOracleText());
+
+            // Color identity (use same helper as CardDefinitionBuilder)
+            properties.put(
+                    "colorIdentity",
+                    CardDefinitionBuilder.calculateColorIdentity(
+                            card.getManaCost() != null ? card.getManaCost().toString() : "",
+                            card.getOracleText()
+                    )
+            );
+
+            // Game state properties
+            if (card.getGame() != null) {
+                properties.put("zone", List.of(card.getZone() != null ? card.getZone().getZoneType().name() : "Library"));
+                properties.put("controller", List.of(card.getController() != null ? card.getController().getName() : "NULL"));
+                properties.put("owner", List.of(card.getOwner() != null ? card.getOwner().getName() : "NULL"));
+                properties.put("tapped", card.isTapped());
+                properties.put("summoningSick", card.hasSickness());
+
+                // Counters
+                Map<String, Integer> counters = new LinkedHashMap<>();
+                for (Map.Entry<CounterType, Integer> entry : card.getCounters().entrySet()) {
+                    counters.put(entry.getKey().toString(), entry.getValue());
+                }
+                properties.put("counters", counters);
+            }
+
+            return properties;
+        }
+
+        private String generateInstanceId(Card card) {
+            if (card.getId() > 0) {
+                return "card_" + card.getId() + "_" + System.currentTimeMillis();
+            } else {
+                return "card_" + card.getName().replaceAll("[^a-zA-Z0-9]", "_") +
+                        "_" + UUID.randomUUID().toString().substring(0, 8);
+            }
+        }
+
+        /**
          * Update a NounInstance when a Card's state changes
          */
         public void updateCardInstance(Card card) {
@@ -735,89 +822,6 @@ public final class ForgeBuilders {
             instance.updateProperties(updatedProperties);
 
             LOGGER.fine("Updated NounInstance for card: " + card.getName());
-        }
-
-        /**
-         * Extract properties from a Card object
-         */
-        private Map<String, Object> extractCardProperties(Card card) {
-            Map<String, Object> properties = new HashMap<>();
-
-            // Basic properties
-            properties.put("name", card.getName());
-            properties.put("types", card.getType().toString());
-
-            // Mana cost
-            if (card.getManaCost() != null) {
-                properties.put("manaCost", card.getManaCost().toString());
-                properties.put("convertedManaCost", card.getCMC());
-            }
-
-            // Type booleans
-            properties.put("isCreature", card.isCreature());
-            properties.put("isArtifact", card.isArtifact());
-            properties.put("isEnchantment", card.isEnchantment());
-            properties.put("isInstant", card.isInstant());
-            properties.put("isSorcery", card.isSorcery());
-            properties.put("isPlaneswalker", card.isPlaneswalker());
-            properties.put("isLand", card.isLand());
-            properties.put("isBattle", card.isBattle());
-
-            // Creature properties
-            if (card.isCreature()) {
-                properties.put("power", String.valueOf(card.getNetPower()));
-                properties.put("toughness", String.valueOf(card.getNetToughness()));
-            }
-
-            // Keywords
-            List<String> keywords = new ArrayList<>();
-            for (KeywordInterface keyword : card.getKeywords()) {
-                keywords.add(String.valueOf(keyword));
-            }
-            properties.put("keywords", keywords);
-
-            // Oracle text
-            properties.put("oracleText", card.getOracleText());
-
-            // Color identity
-            Set<String> colorIdentity = new HashSet<>();
-            if (card.getColor().hasWhite()) colorIdentity.add("White");
-            if (card.getColor().hasBlue()) colorIdentity.add("Blue");
-            if (card.getColor().hasBlack()) colorIdentity.add("Black");
-            if (card.getColor().hasRed()) colorIdentity.add("Red");
-            if (card.getColor().hasGreen()) colorIdentity.add("Green");
-            properties.put("colorIdentity", colorIdentity);
-
-            // Game state properties
-            if (card.getGame() != null) {
-                properties.put("zone", card.getZone() != null ? card.getZone().getZoneType().name() : "Unknown");
-                properties.put("controller", card.getController() != null ? card.getController().getName() : "None");
-                properties.put("owner", card.getOwner() != null ? card.getOwner().getName() : "None");
-                properties.put("isTapped", card.isTapped());
-                properties.put("damage", card.getDamage());
-
-                // Counters
-                Map<String, Integer> counters = new HashMap<>();
-                for (Map.Entry<CounterType, Integer> entry : card.getCounters().entrySet()) {
-                    counters.put(entry.getKey().toString(), entry.getValue());
-                }
-                properties.put("counters", counters);
-            }
-
-            return properties;
-        }
-
-        /**
-         * Generate a unique instance ID for a card
-         */
-        private String generateInstanceId(Card card) {
-            // Use card ID if available, otherwise generate one
-            if (card.getId() > 0) {
-                return "card_" + card.getId() + "_" + System.currentTimeMillis();
-            } else {
-                return "card_" + card.getName().replaceAll("[^a-zA-Z0-9]", "_") +
-                        "_" + UUID.randomUUID().toString().substring(0, 8);
-            }
         }
 
         /**
