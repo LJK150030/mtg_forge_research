@@ -1,8 +1,10 @@
 package APF;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 interface Domain<T> {
+
     boolean isValid(T value);
     Class<T> getType();
     String describe();
@@ -58,6 +60,15 @@ interface Domain<T> {
             if (max == null) return "Integer (min: " + min + ")";
             return "Integer [" + min + ", " + max + "]";
         }
+
+        public Integer getMin() {
+            return min;
+        }
+
+        public Integer getMax() {
+            return max;
+        }
+
     }
 
     final class DoubleDomain implements Domain<Double> {
@@ -106,6 +117,14 @@ interface Domain<T> {
             return "Double " + left + (min != null ? min : "-∞") + ", " +
                     (max != null ? max : "∞") + right;
         }
+
+        public Double getMin() {
+            return min;
+        }
+
+        public Double getMax() {
+            return max;
+        }
     }
 
     final class EnumDomain<T> implements Domain<T> {
@@ -140,16 +159,21 @@ interface Domain<T> {
     final class StringDomain implements Domain<String> {
         private final Integer minLength;
         private final Integer maxLength;
-        private final String pattern; // regex pattern
+        private final Pattern pattern; // compiled regex
 
         public StringDomain() {
             this(null, null, null);
         }
 
-        public StringDomain(Integer minLength, Integer maxLength, String pattern) {
+        public StringDomain(Integer minLength, Integer maxLength, Pattern pattern) {
             this.minLength = minLength;
             this.maxLength = maxLength;
             this.pattern = pattern;
+        }
+
+        // Convenience ctor if you have a regex string
+        public static StringDomain withRegex(Integer minLength, Integer maxLength, String regex) {
+            return new StringDomain(minLength, maxLength, regex == null ? null : Pattern.compile(regex));
         }
 
         @Override
@@ -157,7 +181,7 @@ interface Domain<T> {
             if (value == null) return false;
             if (minLength != null && value.length() < minLength) return false;
             if (maxLength != null && value.length() > maxLength) return false;
-            if (pattern != null && !value.matches(pattern)) return false;
+            if (pattern != null && !pattern.matcher(value).matches()) return false;
             return true;
         }
 
@@ -171,9 +195,13 @@ interface Domain<T> {
             List<String> constraints = new ArrayList<>();
             if (minLength != null) constraints.add("minLen: " + minLength);
             if (maxLength != null) constraints.add("maxLen: " + maxLength);
-            if (pattern != null) constraints.add("pattern: " + pattern);
+            if (pattern != null) constraints.add("pattern: /" + pattern.pattern() + "/");
             return "String" + (constraints.isEmpty() ? "" : " (" + String.join(", ", constraints) + ")");
         }
+
+        public Integer getMinLength() { return minLength; }
+        public Integer getMaxLength() { return maxLength; }
+        public Pattern getPattern() { return pattern; }
     }
 
     final class ListDomain<T> implements Domain<List<T>> {
@@ -235,10 +263,52 @@ interface Domain<T> {
             return "List<" + elementType.getSimpleName() + "> (" + String.join(", ", constraints) + ")";
         }
 
+        public Class<T> getElementType() {
+            return elementType;
+        }
+
         public Set<T> getAllowedValues() {
             return new HashSet<>(allowedValues);
         }
+
+        public Integer getMinSize() {
+            return minSize;
+        }
+
+        public Integer getMaxSize() {
+            return maxSize;
+        }
     }
+
+    final class MapDomain<K,V> implements Domain<Map<K,V>> {
+        private final Domain<K> keyDomain;
+        private final Domain<V> valDomain;
+        private final Set<K> allowedKeys;       // optional
+        private final boolean allowUnknownKeys; // default true
+
+        public MapDomain(Domain<K> keyDomain, Domain<V> valDomain,
+                         Collection<K> allowedKeys, boolean allowUnknownKeys) {
+            this.keyDomain = keyDomain;
+            this.valDomain = valDomain;
+            this.allowedKeys = allowedKeys == null ? null : new HashSet<>(allowedKeys);
+            this.allowUnknownKeys = allowUnknownKeys;
+        }
+
+        public boolean isValid(Map<K,V> m) {
+            if (m == null) return false;
+            for (var e : m.entrySet()) {
+                if (!keyDomain.isValid(e.getKey())) return false;
+                if (!valDomain.isValid(e.getValue())) return false;
+                if (allowedKeys != null && !allowedKeys.contains(e.getKey()) && !allowUnknownKeys) return false;
+            }
+            return true;
+        }
+
+        public Class<Map<K,V>> getType() { @SuppressWarnings("unchecked") var c = (Class<Map<K,V>>)(Class<?>)Map.class; return c; }
+        public String describe() { return "Map<" + keyDomain.describe() + "," + valDomain.describe() + ">"; }
+    }
+
+
 }
 
 

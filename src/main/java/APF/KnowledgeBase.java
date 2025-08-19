@@ -18,15 +18,16 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     private static KnowledgeBase instance;
 
     // Storage
-    private final Map<String, NounDefinition> definitions;
+    private final Map<String, NounDefinition> nounDefinitions;
     private final Map<String, NounInstance> instances;
     private final Map<String, List<NounInstance>> instancesByClass;
+    private final ForgeBuilders.Neo4jDefinitionBuilder neo4jBuilder;
 
     // Event processing - custom processors for extensibility
     private final List<EventProcessor> eventProcessors;
 
     private KnowledgeBase() {
-        this.definitions = new ConcurrentHashMap<>();
+        this.nounDefinitions = new ConcurrentHashMap<>();
         this.instances = new ConcurrentHashMap<>();
         this.instancesByClass = new ConcurrentHashMap<>();
         this.eventProcessors = new ArrayList<>();
@@ -34,6 +35,12 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
         ForgeBuilders.CardDefinitionBuilder definitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath, this);
         definitionBuilder.buildAllCardDefinitions();
+
+        neo4jBuilder = new ForgeBuilders.Neo4jDefinitionBuilder(this);
+
+        neo4jBuilder.clearAllDefinitions();
+        neo4jBuilder.createIndexes();
+        neo4jBuilder.buildAllNounDefinitions();
     }
 
     /**
@@ -54,7 +61,7 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
      * Register a NounDefinition
      */
     public void registerDefinition(NounDefinition definition) {
-        definitions.put(definition.getClassName(), definition);
+        nounDefinitions.put(definition.getClassName(), definition);
         instancesByClass.putIfAbsent(definition.getClassName(), new ArrayList<>());
         LOGGER.info("Registered definition: " + definition.getClassName());
     }
@@ -63,7 +70,7 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
      * Create a new instance from a definition
      */
     public NounInstance createInstance(String className, String objectId) {
-        NounDefinition definition = definitions.get(className);
+        NounDefinition definition = nounDefinitions.get(className);
         if (definition == null) {
             throw new IllegalArgumentException("No definition found for class: " + className);
         }
@@ -74,6 +81,10 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
 
         LOGGER.info("Created instance: " + objectId + " of class: " + className);
         return instance;
+    }
+
+    public Map<String, NounDefinition> getNounDefinitions() {
+        return nounDefinitions;
     }
 
     /**

@@ -2,6 +2,7 @@ package APF;
 
 import java.util.*;
 import java.time.Instant;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -112,6 +113,10 @@ public class NounDefinition {
             return addProperty(name, defaultValue, new Domain.StringDomain(minLength, maxLength, null));
         }
 
+        public Builder addStringProperty(String name, String defaultValue, Integer minLength, Integer maxLength, Pattern regex) {
+            return addProperty(name, defaultValue, new Domain.StringDomain(minLength, maxLength, regex));
+        }
+
         public Builder addBooleanProperty(String name, Boolean defaultValue) {
             return addProperty(name, defaultValue, new Domain.BooleanDomain());
         }
@@ -126,6 +131,47 @@ public class NounDefinition {
             requiredProperties.add(name);
             return this;
         }
+
+        /**
+         * Adds a list property with simple constraints (just allowed values)
+         */
+        public <T> Builder addListProperty(String name, List<T> defaultValue, Collection<T> allowedValues) {
+            if (defaultValue == null || defaultValue.isEmpty()) {
+                throw new IllegalArgumentException("Default value cannot be null or empty for list property");
+            }
+
+            @SuppressWarnings("unchecked")
+            Class<T> elementType = (Class<T>) defaultValue.get(0).getClass();
+
+            return addProperty(name, defaultValue, new Domain.ListDomain<>(elementType, allowedValues));
+        }
+
+        /**
+         * Adds a list property with full constraints
+         */
+        public <T> Builder addListProperty(String name, List<T> defaultValue, Class<T> elementType,
+                                           Collection<T> allowedValues, Integer minSize, Integer maxSize,
+                                           boolean allowDuplicates) {
+            return addProperty(name, defaultValue,
+                    new Domain.ListDomain<>(elementType, allowedValues, minSize, maxSize, allowDuplicates));
+        }
+
+        /**
+         * Adds a list property with size constraints but allows duplicates
+         */
+        public <T> Builder addListProperty(String name, List<T> defaultValue, Collection<T> allowedValues,
+                                           Integer minSize, Integer maxSize) {
+            if (defaultValue == null || defaultValue.isEmpty()) {
+                throw new IllegalArgumentException("Default value cannot be null or empty for list property");
+            }
+
+            @SuppressWarnings("unchecked")
+            Class<T> elementType = (Class<T>) defaultValue.get(0).getClass();
+
+            return addProperty(name, defaultValue,
+                    new Domain.ListDomain<>(elementType, allowedValues, minSize, maxSize, true));
+        }
+
 
         public NounDefinition build() {
             // Validate that all required properties have definitions
