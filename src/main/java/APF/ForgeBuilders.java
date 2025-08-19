@@ -182,6 +182,16 @@ public final class ForgeBuilders {
                             0,
                             9999
                     );
+
+                    // Color identity
+                    builder.addListProperty(
+                            "colorIdentity",
+                            calculateColorIdentity(formattedManaCost,  cardData.get("Oracle")),
+                            String.class,
+                            CARD_COLOR_ID,
+                            0,
+                            5,
+                            false);
                 }
             }
 
@@ -260,7 +270,8 @@ public final class ForgeBuilders {
                         KEYWORD_ABILITIES,
                         0,
                         16,
-                        false);
+                        false
+                );
             }
 
             // Abilities - from A:, T:, S: lines
@@ -274,18 +285,64 @@ public final class ForgeBuilders {
                     oracleText,
                     0,
                     5000,
-                    MATCH_ANYTHING);
+                    MATCH_ANYTHING
+            );
 
-            // Color identity
+
+            ///  Stateful infromation
+
+            // Zones
             builder.addListProperty(
-                    "colorIdentity",
-                    calculateColorIdentity(cardData),
+                    "zone",
+                    List.of("Library"),
                     String.class,
-                    CARD_COLOR_ID,
-                    0,
-                    5,
-                    false);
+                    ZONE_TYPES,
+                    1,
+                    1,
+                    false
+            );
 
+
+            builder.addListProperty(
+                    "owner",
+                    List.of("NULL"),
+                    String.class,
+                    PLAYERS,
+                    1,
+                    1,
+                    false
+            );
+
+            builder.addListProperty(
+                    "controller",
+                    List.of("NULL"),
+                    String.class,
+                    PLAYERS,
+                    1,
+                    1,
+                    false
+            );
+
+            builder.addBooleanProperty(
+                "tapped",
+                false
+            );
+
+            builder.addBooleanProperty(
+                    "summoningSick",
+                    false
+            );
+
+            builder.addMapProperty(
+                    "counters",
+                    new java.util.LinkedHashMap<String, Integer>(),  // default empty
+                    String.class,
+                    Integer.class,
+                    new Domain.StringDomain(1, 40, NON_EMPTY),   // key: counter name
+                    new Domain.IntDomain(0, 999),                       // value: non-negative count
+                    0,                                               // min entries
+                    128                                              // max entries (tweak as you like)
+            );
 
             return builder.build();
         }
@@ -392,7 +449,7 @@ public final class ForgeBuilders {
                     numBuilder.append(c);
                 } else {
                     // Add any accumulated number
-                    if (numBuilder.length() > 0) {
+                    if (!numBuilder.isEmpty()) {
                         formatted.append("{").append(numBuilder).append("}");
                         numBuilder = new StringBuilder();
                     }
@@ -408,7 +465,7 @@ public final class ForgeBuilders {
                             // Remove the last added symbol and re-add with P
                             String last = formatted.substring(formatted.length() - 3);
                             formatted.setLength(formatted.length() - 3);
-                            formatted.append(last.substring(0, 2)).append("/P}");
+                            formatted.append(last, 0, 2).append("/P}");
                         }
                     } else if (c == '/') {
                         // Hybrid mana handling
@@ -570,17 +627,16 @@ public final class ForgeBuilders {
         /**
          * Calculate color identity from card data
          */
-        public static List<String> calculateColorIdentity(Map<String, String> cardData) {
+        public static List<String> calculateColorIdentity(String formattedManaCost, String oracleText) {
             Set<String> colors = new HashSet<>();
-            extractColors(cardData.getOrDefault("ManaCost", ""), colors);
-            extractColors(cardData.getOrDefault("Oracle", ""), colors); // only braced symbols will match
-
-            // Return in canonical order
+            extractColors(formattedManaCost != null ? formattedManaCost : "", colors);
+            extractColors(oracleText != null ? oracleText : "", colors);
             return CARD_COLOR_ID.stream().filter(colors::contains).toList();
         }
 
         private static void extractColors(String text, Set<String> out) {
             if (text == null || text.isEmpty()) return;
+
             Matcher m = ELEMENT_BASED_BRACED.matcher(text);
             while (m.find()) {
                 String token = m.group(1);          // e.g. "U", "2/W", "B/G", "W/P", "10"
@@ -590,6 +646,7 @@ public final class ForgeBuilders {
                 }
             }
         }
+
 
         /**
          * Sanitize card name for use as a class name
@@ -1047,7 +1104,9 @@ public final class ForgeBuilders {
                 info.put("type", "STRING");
                 if (stringDomain.getMinLength() != null) constraints.put("minLength", stringDomain.getMinLength());
                 if (stringDomain.getMaxLength() != null) constraints.put("maxLength", stringDomain.getMaxLength());
-                if (stringDomain.getPattern() != null) constraints.put("pattern", stringDomain.getPattern());
+                if (stringDomain.getPattern() != null) {
+                    constraints.put("pattern", stringDomain.getPattern().pattern()); // Use .pattern() to get string
+                }
 
             } else if (domain instanceof Domain.BooleanDomain) {
                 info.put("type", "BOOLEAN");
@@ -1059,13 +1118,19 @@ public final class ForgeBuilders {
                         .map(Object::toString)
                         .collect(Collectors.toList()));
 
-            } else if (domain instanceof Domain.ListDomain) {
+            }  else if (domain instanceof Domain.ListDomain) {
                 Domain.ListDomain<?> listDomain = (Domain.ListDomain<?>) domain;
                 info.put("type", "LIST");
                 if (listDomain.getMinSize() != null) constraints.put("minSize", listDomain.getMinSize());
                 if (listDomain.getMaxSize() != null) constraints.put("maxSize", listDomain.getMaxSize());
-                // Recursively handle element domain if needed
-                constraints.put("elementType", listDomain.getElementType());
+
+                constraints.put("elementType", listDomain.getElementType().getSimpleName());
+
+                if (listDomain.getAllowedValues() != null && !listDomain.getAllowedValues().isEmpty()) {
+                    constraints.put("allowedValues", listDomain.getAllowedValues().stream()
+                            .map(Object::toString)
+                            .collect(Collectors.toList()));
+                }
             }
             else {
                 info.put("type", domainClassName.replace("Domain", "").toUpperCase());

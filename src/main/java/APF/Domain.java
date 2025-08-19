@@ -280,32 +280,65 @@ interface Domain<T> {
         }
     }
 
-    final class MapDomain<K,V> implements Domain<Map<K,V>> {
-        private final Domain<K> keyDomain;
-        private final Domain<V> valDomain;
-        private final Set<K> allowedKeys;       // optional
-        private final boolean allowUnknownKeys; // default true
+    final class MapDomain<K, V> implements Domain<Map<K, V>> {
+        private final Class<K> keyType;
+        private final Class<V> valueType;
+        private final Domain<K> keyDomain;     // validation for keys
+        private final Domain<V> valueDomain;   // validation for values
+        private final Integer minSize;         // optional
+        private final Integer maxSize;         // optional
 
-        public MapDomain(Domain<K> keyDomain, Domain<V> valDomain,
-                         Collection<K> allowedKeys, boolean allowUnknownKeys) {
+        MapDomain(Class<K> keyType,
+                  Class<V> valueType,
+                  Domain<K> keyDomain,
+                  Domain<V> valueDomain,
+                  Integer minSize,
+                  Integer maxSize) {
+            this.keyType = Objects.requireNonNull(keyType);
+            this.valueType = Objects.requireNonNull(valueType);
             this.keyDomain = keyDomain;
-            this.valDomain = valDomain;
-            this.allowedKeys = allowedKeys == null ? null : new HashSet<>(allowedKeys);
-            this.allowUnknownKeys = allowUnknownKeys;
+            this.valueDomain = valueDomain;
+            this.minSize = minSize;
+            this.maxSize = maxSize;
         }
 
-        public boolean isValid(Map<K,V> m) {
-            if (m == null) return false;
-            for (var e : m.entrySet()) {
-                if (!keyDomain.isValid(e.getKey())) return false;
-                if (!valDomain.isValid(e.getValue())) return false;
-                if (allowedKeys != null && !allowedKeys.contains(e.getKey()) && !allowUnknownKeys) return false;
+        @Override
+        public boolean isValid(Map<K, V> map) {
+            if (map == null) return false;
+            if (minSize != null && map.size() < minSize) return false;
+            if (maxSize != null && map.size() > maxSize) return false;
+
+            for (Map.Entry<K, V> e : map.entrySet()) {
+                K k = e.getKey();
+                V v = e.getValue();
+                if (k == null || v == null) return false;
+                if (!keyType.isInstance(k) || !valueType.isInstance(v)) return false;
+                if (keyDomain != null && !keyDomain.isValid(k)) return false;
+                if (valueDomain != null && !valueDomain.isValid(v)) return false;
             }
             return true;
         }
 
-        public Class<Map<K,V>> getType() { @SuppressWarnings("unchecked") var c = (Class<Map<K,V>>)(Class<?>)Map.class; return c; }
-        public String describe() { return "Map<" + keyDomain.describe() + "," + valDomain.describe() + ">"; }
+        @Override
+        public Class<Map<K, V>> getType() {
+            @SuppressWarnings("unchecked")
+            Class<Map<K, V>> c = (Class<Map<K, V>>) (Class<?>) Map.class;
+            return c;
+        }
+
+        @Override
+        public String describe() {
+            return "Map<" + keyType.getSimpleName() + "," + valueType.getSimpleName() + ">"
+                    + " with keys: " + (keyDomain == null ? "any" : keyDomain.describe())
+                    + ", values: " + (valueDomain == null ? "any" : valueDomain.describe())
+                    + sizeText();
+        }
+
+        private String sizeText() {
+            if (minSize == null && maxSize == null) return "";
+            return " (size " + (minSize == null ? "≥0" : "≥" + minSize)
+                    + (maxSize == null ? "" : ", ≤" + maxSize) + ")";
+        }
     }
 
 

@@ -2,6 +2,7 @@ package com.example.research;
 
 import APF.ForgeBuilders;
 import APF.KnowledgeBase;
+import APF.magic_commons.*;
 import forge.ai.PlayerControllerAi;
 import forge.deck.*;
 import forge.game.*;
@@ -11,6 +12,8 @@ import forge.game.zone.ZoneType;
 
 import java.io.*;
 import java.util.*;
+
+import static APF.magic_commons.PLAYERS;
 
 /**
  * Updated ForgeMatch Implementation with GameStateTracker integration
@@ -55,10 +58,10 @@ public class ForgeMatch {
             // Step 1: Create AI Players
             output.println("👥 Creating AI players...");
 
-            ForgePlayerAI  aiPlayer1 = new ForgePlayerAI("Player 1");
+            ForgePlayerAI  aiPlayer1 = new ForgePlayerAI(PLAYERS.get(1));
             aiPlayer1.setAiProfile("Default");
 
-            ForgePlayerAI  aiPlayer2 = new ForgePlayerAI("Player 2");
+            ForgePlayerAI  aiPlayer2 = new ForgePlayerAI(PLAYERS.get(2));
             aiPlayer2.setAiProfile("Gambler");
 
             aiPlayer1.setAllowCheatShuffle(false);

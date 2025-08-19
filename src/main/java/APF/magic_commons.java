@@ -5,6 +5,10 @@ import java.util.regex.Pattern;
 
 public final class magic_commons {
 
+    public static final List<String> PLAYERS = Arrays.asList(
+            "NULL", "Player_1", "Player_2"
+    );
+
     public static final List<String> CARD_COLOR_ID = Arrays.asList(
             "White", "Blue", "Black", "Red", "Green"
     );
@@ -227,4 +231,43 @@ public final class magic_commons {
     static {
         TYPE_TO_SUBTYPES.values().forEach(ALL_SUBTYPES::addAll);
     }
+
+
+    public static final List<String> ZONE_TYPES = Arrays.asList(
+            "Ante", "Battlefield", "Command", "Exile", "Graveyard", "Hand", "Library", "Stack"
+    );
+
+    public static final Set<String> ZONE_TYPES_SET = new HashSet<>(ZONE_TYPES);
+
+
+    public static final List<String> CARD_COUNTER_TYPES = Arrays.asList(
+            "M1M1", "P1P1", "Loyalty", "Acorn", "Aegis", "Age", "Aim", "Arrow", "Arrowhead", "Awakening", "Bait",
+            "Blaze", "Blessing", "Blight", "Blood", "Bloodline", "Bloodstain", "Bore", "Bounty", "Brain", "Bribery",
+            "Brick", "Burden", "Cage", "Carrion", "Cell ", "Charge", "Chorus", "Coin", "Collection", "Component",
+            "Contested", "Corpse", "Corruption", "Croak", "Credit", "Crystal", "Cube", "Currency", "Death", "Defense",
+            "Delay", "Depletion", "Descent", "Despair", "Devotion", "Discovery", "Divinity", "Doom", "Dread ", "Dream",
+            "Duty", "Echo", "Egg", "Elixir", "Ember", "Eon", "Eruption", "Exposure", "Eyeball", "Eyestalk",
+            "Everything", "Fade", "Fate", "Feather", "Feeding", "Fellowship", "Fetch", "Filibuster", "Finality", "Fire",
+            "Flame", "Flavor", "Flood", "Foreshadow", "Fungus", "Funk", "Fury", "Fuse", "Gem", "Ghostform", "Glyph",
+            "Gold", "Growth", "Harmony", "Hatching", "Hatchling", "Healing", "Hit", "Hone", "Hope", "Hoofprint", "Hour",
+            "Hourglass", "Hunger", "Husk", "Ice", "Impostor", "Incarnation", "Incubation", "Ingredient", "Infection",
+            "Influence", "Ingenuity", "Intel", "Intervention", "Invitation", "Isolation", "Javelin", "Judgment", "Ki",
+            "Kick", "Knowledge", "Landmark", "Level", "Loot", "Lore", "Luck", "Manabond", "M0m1", "M0m2", "M1m0",
+            "M2m1", "M2m2", "Magnet", "Mana", "Manifestation", "Mannequin", "Matrix", "Memory", "Midway", "Mine",
+            "Mining", "Mire", "Music", "Muster", "Necrodermis", "Net", "Nest", "Oil", "Omen", "Ore", "Page", "Pain",
+            "Paralyzation", "Petal", "Petrification", "Pin", "Plague", "Plot", "Pressure", "Phylactery", "Phyresis",
+            "Point", "Polyp", "Possession", "Prey", "Pupa", "P0p1", "P0p2", "P1p0", "P1p2", "P2p0", "P2p2", "Quest",
+            "Rally", "Release", "Reprieve", "Rejection", "Rev", "Revival", "Ribbon", "Ritual", "Rope", "Rust", "Scream",
+            "Scroll", "Shell", "Shield", "Shred", "Silver", "Skewer", "Sleep", "Slumber", "Sleight", "Slime", "Soul",
+            "Soot", "Spite", "Spore", "Stash", "Storage", "Story", "Strife", "Study", "Stun", "Supply", "Takeover",
+            "Task", "Theft", "Tide", "Time", "Tower", "Training", "Trap", "Treasure", "Unity", "Unlock", "Valor",
+            "Velocity", "Verse", "Vitality", "Vortex", "Voyage", "Wage", "Winch", "Wind", "Wish", "Wreck"
+    );
+
+    public static final Set<String> CARD_COUNTER_TYPES_SET = new HashSet<>(CARD_COUNTER_TYPES);
+
+    public static final List<String> PLAYER_COUNTER_TYPES = Arrays.asList(
+            "Energy", "Experience", "Poison", "Rad", "Ticket"
+    );
+
 }

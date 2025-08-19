@@ -172,6 +172,36 @@ public class NounDefinition {
                     new Domain.ListDomain<>(elementType, allowedValues, minSize, maxSize, true));
         }
 
+        /** Add a Map<K,V> property with a MapDomain; allows empty default (recommended). */
+        public <K, V> Builder addEmptyMapProperty(String name, Domain.MapDomain<K, V> domain) {
+            return addProperty(name, new LinkedHashMap<K, V>(), domain);
+        }
+
+        /** Add a Map<K,V> property with an explicit default map (may be empty or pre-populated). */
+        public <K, V> Builder addMapProperty(String name, Map<K, V> defaultValue, Domain.MapDomain<K, V> domain) {
+            Map<K, V> safeDefault = (defaultValue == null) ? new LinkedHashMap<>() : new LinkedHashMap<>(defaultValue);
+            return addProperty(name, safeDefault, domain);
+        }
+
+        public <K, V> Builder addMapProperty(
+                String name,
+                Map<K, V> defaultValue,
+                Class<K> keyType,
+                Class<V> valueType,
+                Domain<K> keyDomain,
+                Domain<V> valueDomain,
+                Integer minSize,
+                Integer maxSize) {
+
+            Map<K, V> copy = defaultValue == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(defaultValue);
+            Domain.MapDomain<K, V> domain = new Domain.MapDomain<>(keyType, valueType, keyDomain, valueDomain, minSize, maxSize);
+
+            // Assuming your NounProperty constructor mirrors other add*Property methods
+            propertyPrototypes.put(name, new NounProperty(name, copy, domain));
+            return this;
+        }
+
+
 
         public NounDefinition build() {
             // Validate that all required properties have definitions
