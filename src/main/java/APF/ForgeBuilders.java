@@ -266,7 +266,17 @@ public final class ForgeBuilders {
                      "loyalty",
                         Integer.parseInt(loyalty),
                         0,
-                        1
+                        999
+                );
+            }
+
+            if (parsed.types.contains("Battle") && cardData.containsKey("Defense")) {
+                String defense = cardData.get("Defense");
+                builder.addIntProperty(
+                        "Defense",
+                        Integer.parseInt(defense),
+                        0,
+                        999
                 );
             }
 
