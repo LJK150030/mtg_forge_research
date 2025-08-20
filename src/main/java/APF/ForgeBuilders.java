@@ -174,14 +174,15 @@ public final class ForgeBuilders {
                             0,
                             100,
                             FULL_BRACED
-                    );
+                    ).addRequiredProperty("manaCost");
 
                     builder.addIntProperty(
                             "convertedManaCost",
                             calculateCMC(manaCost),
                             0,
                             9999
-                    );
+                    ).addRequiredProperty("convertedManaCost");
+
 
                     // Color identity
                     builder.addListProperty(
@@ -191,7 +192,7 @@ public final class ForgeBuilders {
                             CARD_COLOR_ID,
                             0,
                             5,
-                            false);
+                            false).addRequiredProperty("colorIdentity");
                 }
             }
 
@@ -220,7 +221,7 @@ public final class ForgeBuilders {
                         0,
                         16,
                         false
-                );
+                ).addRequiredProperty("types.cardTypes");
             }
 
 
@@ -306,7 +307,8 @@ public final class ForgeBuilders {
                     0,
                     5000,
                     MATCH_ANYTHING
-            );
+            ).addRequiredProperty("oracleText");
+
 
 
             ///  Stateful infromation
