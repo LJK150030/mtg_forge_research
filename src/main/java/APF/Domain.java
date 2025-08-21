@@ -342,6 +342,63 @@ interface Domain<T> {
     }
 
 
+    final class KBRefDomain implements Domain<String> {
+        private final KnowledgeBase kb;
+        private final Pattern shape;
+
+        public KBRefDomain(KnowledgeBase kb, String idRegex) {
+            this.kb = kb;
+            this.shape = Pattern.compile(idRegex);
+        }
+
+        @Override
+        public boolean isValid(String v) {
+            if (v == null || !shape.matcher(v).matches()) return false;
+            // No need to add kb.hasInstance(); use existing getInstance(...)
+            return kb.getInstance(v) != null;
+        }
+
+        @Override
+        public Class<String> getType() { return String.class; }
+
+        @Override
+        public String describe() { return "KB reference (regex=" + shape.pattern() + ")"; }
+    }
+
+    final class KBRefListDomain implements Domain<List<String>> {
+        private final Domain<String> elementDomain;
+        private final int min;
+        private final int max;
+
+        public KBRefListDomain(Domain<String> elementDomain, int min, int max) {
+            this.elementDomain = elementDomain;
+            this.min = min;
+            this.max = max;
+        }
+
+        @Override
+        public boolean isValid(List<String> list) {
+            if (list == null) return min == 0;              // allow empty if min == 0
+            int n = list.size();
+            if (n < min || n > max) return false;
+            for (String id : list) {
+                if (!elementDomain.isValid(id)) return false;
+            }
+            return true;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public Class<List<String>> getType() {
+            return (Class<List<String>>) (Class<?>) List.class;
+        }
+
+        @Override
+        public String describe() {
+            return "List<" + elementDomain.describe() + ">[" + min + "," + max + "]";
+        }
+    }
+
 }
 
 

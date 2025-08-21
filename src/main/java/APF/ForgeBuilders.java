@@ -692,245 +692,515 @@ public final class ForgeBuilders {
         }
     }
 
-    public class CardInstanceFactory {
-        private static final Logger LOGGER = Logger.getLogger(CardInstanceFactory.class.getName());
+    /**
+     * ZoneDefinitionBuilder defines MTG zones as NounDefinitions and
+     * registers them with the KnowledgeBase. Mirrors CardDefinitionBuilder's pattern.
+     *
+     * Each definition is a prototype (schema + defaults). Create per-game instances
+     * later with NounDefinition#createInstance(...).
+     */
+    public static final class ZoneDefinitionBuilder {
+        private static final Logger LOGGER = Logger.getLogger(ZoneDefinitionBuilder.class.getName());
 
-        private final CardDefinitionBuilder definitionBuilder;
+        private final Map<String, NounDefinition> zoneDefinitions = new HashMap<>();
         private final KnowledgeBase knowledgeBase;
-        private final Map<Card, NounInstance> cardToInstance;
-        private final Map<NounInstance, Card> instanceToCard;
 
-        public CardInstanceFactory(CardDefinitionBuilder definitionBuilder) {
-            this.definitionBuilder = definitionBuilder;
-            this.knowledgeBase = KnowledgeBase.getInstance();
-            this.cardToInstance = new HashMap<>();
-            this.instanceToCard = new HashMap<>();
+        public ZoneDefinitionBuilder(KnowledgeBase knowledgeBase) {
+            this.knowledgeBase = knowledgeBase;
         }
 
-        /**
-         * Create a NounInstance for a Card
-         */
-        public NounInstance createCardInstance(Card card) {
-            String cardName = card.getName();
-            NounDefinition definition = definitionBuilder.getCardDefinition(cardName);
+        /** Build and register all canonical zones (shared + per-player archetypes). */
+        public void buildAllZoneDefinitions() {
+            register(buildBattlefield());
+            //register(buildCommand());
+            register(buildExile());
+            register(buildStack());
 
-            if (definition == null) {
-                LOGGER.warning("No definition found for card: " + cardName);
-                return null;
-            }
+            // Per-player archetypes (owner will be set on instance)
+            register(buildLibrary());
+            register(buildHand());
+            register(buildGraveyard());
 
-            // Create unique ID for this card instance
-            String instanceId = generateInstanceId(card);
+            LOGGER.info("Successfully built " + zoneDefinitions.size() + " zone definitions");
+        }
 
-            // Create initial property values from the Card
-            Map<String, Object> initialValues = extractCardProperties(card);
+        private void register(NounDefinition def) {
+            zoneDefinitions.put(def.getClassName(), def);
+            knowledgeBase.registerDefinition(def);
+            LOGGER.fine("Registered zone definition: " + def.getClassName());
+        }
 
-            // Create the NounInstance
-            NounInstance instance = knowledgeBase.createInstance(
-                    definition.getClassName(),
-                    instanceId
+        // ====== Zone prototypes ===================================================
+
+        /** Battlefield — public zone, unordered (arrangement free), permanents only. */
+        private NounDefinition buildBattlefield() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Battlefield")
+                    .description("Battlefield zone (public, permanents only)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Battlefield",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Public",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            // Shared zone (owner not applicable). Keep single owner slot with NULL default.
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
             );
 
-            // Update with card-specific values
-            instance.updateProperties(initialValues);
-
-            // Store bidirectional mapping
-            cardToInstance.put(card, instance);
-            instanceToCard.put(instance, card);
-
-            LOGGER.fine("Created NounInstance for card: " + cardName + " with ID: " + instanceId);
-
-            return instance;
-        }
-
-        /**
-         * Extract properties from a Card object to match schema in CardDefinitionBuilder
-         */
-        private Map<String, Object> extractCardProperties(Card card) {
-            Map<String, Object> properties = new HashMap<>();
-
-            // Identity
-            properties.put("name", card.getName());
-
-            // Mana cost and CMC
-            if (card.getManaCost() != null) {
-                properties.put("manaCost", card.getManaCost().toString());
-                properties.put("convertedManaCost", card.getCMC());
-            }
-
-            // Types
-            //List<String> supertypes = new ArrayList<>(card.getType().getSuperTypes());
-            //List<String> types = new ArrayList<>(card.getType().getCardTypes());
-            //List<String> subtypes = new ArrayList<>(card.getType().getSubTypes());
-
-            //if (!supertypes.isEmpty()) properties.put("types.superTypes", supertypes);
-            //if (!types.isEmpty()) properties.put("types.cardTypes", types);
-            //if (!subtypes.isEmpty()) properties.put("types.subTypes", subtypes);
-
-            // Creature-specific
-            if (card.isCreature()) {
-                properties.put("power", String.valueOf(card.getNetPower()));
-                properties.put("toughness", String.valueOf(card.getNetToughness()));
-            }
-
-            // Keywords
-            List<String> keywords = new ArrayList<>();
-            for (KeywordInterface keyword : card.getKeywords()) {
-                keywords.add(keyword.toString());
-            }
-            properties.put("keywords", keywords);
-
-            // Oracle text
-            properties.put("oracleText", card.getOracleText());
-
-            // Color identity (use same helper as CardDefinitionBuilder)
-            properties.put(
-                    "colorIdentity",
-                    CardDefinitionBuilder.calculateColorIdentity(
-                            card.getManaCost() != null ? card.getManaCost().toString() : "",
-                            card.getOracleText()
-                    )
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Artifact","Creature","Enchantment","Land","Planeswalker","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
             );
 
-            // Game state properties
-            if (card.getGame() != null) {
-                properties.put("zone", List.of(card.getZone() != null ? card.getZone().getZoneType().name() : "Library"));
-                properties.put("controller", List.of(card.getController() != null ? card.getController().getName() : "NULL"));
-                properties.put("owner", List.of(card.getOwner() != null ? card.getOwner().getName() : "NULL"));
-                properties.put("tapped", card.isTapped());
-                properties.put("summoningSick", card.hasSickness());
+            Domain<String> idRef = new Domain.KBRefDomain(knowledgeBase, "^(Card_|Token_).+");
 
-                // Counters
-                Map<String, Integer> counters = new LinkedHashMap<>();
-                for (Map.Entry<CounterType, Integer> entry : card.getCounters().entrySet()) {
-                    counters.put(entry.getKey().toString(), entry.getValue());
-                }
-                properties.put("counters", counters);
-            }
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+            );
 
-            return properties;
+            // Shared zone marker
+            b.addBooleanProperty("shared", true);
+
+            return b.build();
         }
 
-        private String generateInstanceId(Card card) {
-            if (card.getId() > 0) {
-                return "card_" + card.getId() + "_" + System.currentTimeMillis();
-            } else {
-                return "card_" + card.getName().replaceAll("[^a-zA-Z0-9]", "_") +
-                        "_" + UUID.randomUUID().toString().substring(0, 8);
-            }
+        /** Command — public, shared, special object types (Conspiracy/Plane/Phenomenon/Scheme/Vanguard), emblems allowed. */
+        private NounDefinition buildCommand() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Command")
+                    .description("Command zone (public, shared; special objects live here)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Command",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Public",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addBooleanProperty("ordered", false);
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Creature","Planeswalker","Enchantment","Artifact"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_|Emblem_|Dungeon_|Plane_|Phenomenon_|Scheme_|Vanguard_).+", 0, 10000)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Update a NounInstance when a Card's state changes
-         */
-        public void updateCardInstance(Card card) {
-            NounInstance instance = cardToInstance.get(card);
-            if (instance == null) {
-                LOGGER.warning("No instance found for card: " + card.getName());
-                return;
-            }
+        /** Exile — public, ordered status is “no” (CR 400.5 doesn’t constrain Exile order), any card type. */
+        private NounDefinition buildExile() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Exile")
+                    .description("Exile zone (public; any card type; can include face-down exiled objects)");
 
-            Map<String, Object> updatedProperties = extractCardProperties(card);
-            instance.updateProperties(updatedProperties);
+            b.addEnumProperty(
+                    "zoneType",
+                    "Exile",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
 
-            LOGGER.fine("Updated NounInstance for card: " + card.getName());
+            b.addEnumProperty(
+                    "visibility",
+                    "Public",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
+            );
+
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Artifact","Creature","Enchantment","Instant","Land","Planeswalker","Sorcery","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Get NounInstance for a Card
-         */
-        public NounInstance getInstance(Card card) {
-            return cardToInstance.get(card);
+        /** Stack — public, ordered (LIFO), contains spells and abilities (instants/sorceries + other spells-as-objects). */
+        private NounDefinition buildStack() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Stack")
+                    .description("Stack (public; ordered; spells/abilities)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Stack",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Public",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
+            );
+
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Artifact","Creature","Enchantment","Planeswalker","Sorcery","Instant","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Get Card for a NounInstance
-         */
-        public Card getCard(NounInstance instance) {
-            return instanceToCard.get(instance);
+        /** Library — hidden, ordered (top/bottom), per-player. */
+        private NounDefinition buildLibrary() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Library")
+                    .description("Library (hidden; ordered; one per player)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Library",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Hidden",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
+            ).addRequiredProperty("owner");
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Artifact","Creature","Enchantment","Planeswalker","Sorcery","Instant","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+            // Useful state flags for gameplay bookkeeping
+            b.addBooleanProperty(
+                    "topRevealed",
+                    false
+            );
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 100000)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Remove instance when card is removed from game
-         */
-        public void removeCardInstance(Card card) {
-            NounInstance instance = cardToInstance.remove(card);
-            if (instance != null) {
-                instanceToCard.remove(instance);
-                LOGGER.fine("Removed NounInstance for card: " + card.getName());
-            }
+        /** Hand — hidden, unordered, per-player; default max size 7 per CR 402.2. */
+        private NounDefinition buildHand() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Hand")
+                    .description("Hand (hidden; unordered; one per player)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Hand",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Hidden",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
+            ).addRequiredProperty("owner");
+
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of("Artifact","Creature","Enchantment","Instant","Land","Planeswalker","Sorcery","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+            b.addIntProperty(
+                    "maxSize",
+                    7,
+                    0,
+                    99
+            );
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 64)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Get all card instances
-         */
-        public Collection<NounInstance> getAllInstances() {
-            return Collections.unmodifiableCollection(cardToInstance.values());
+        /** Graveyard — public, ordered (single face-up pile), per-player. */
+        private NounDefinition buildGraveyard() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Zone_Graveyard")
+                    .description("Graveyard (public; ordered; one per player)");
+
+            b.addEnumProperty(
+                    "zoneType",
+                    "Graveyard",
+                    ZONE_TYPES
+            ).addRequiredProperty("zoneType");
+
+            b.addEnumProperty(
+                    "visibility",
+                    "Public",
+                    Arrays.asList("Public", "Hidden")
+            ).addRequiredProperty("visibility");
+
+            b.addEnumProperty(
+                    "owner",
+                    "NULL",
+                    PLAYERS
+            ).addRequiredProperty("owner");
+
+
+            b.addListProperty(
+                    "allowedCardTypes",
+                    List.of( "Artifact","Creature","Enchantment","Instant","Land","Planeswalker","Sorcery","Battle","Kindred"),
+                    String.class,
+                    CARD_TYPES_SET,
+                    0,
+                    1000,
+                    true
+            );
+
+            b.addProperty(
+                    "contents",
+                    new ArrayList<String>(),
+                    contentsDomain("^(Card_|Token_).+", 0, 2000)
+            );
+
+            return b.build();
         }
 
-        /**
-         * Query instances by property
-         */
-        public List<NounInstance> queryInstances(String propertyName, Object value) {
-            List<NounInstance> results = new ArrayList<>();
+        // ====== Accessors =========================================================
 
-            for (NounInstance instance : cardToInstance.values()) {
-                Object propValue = instance.getProperty(propertyName);
-                if (propValue != null && propValue.equals(value)) {
-                    results.add(instance);
-                }
-            }
-
-            return results;
+        private Domain<List<String>> contentsDomain(String idRegex, int min, int max) {
+            Domain<String> idRef = new Domain.KBRefDomain(knowledgeBase, idRegex);
+            return new Domain.KBRefListDomain(idRef, min, max);
         }
 
-        /**
-         * Query instances by type
-         */
-        public List<NounInstance> queryByType(String cardType) {
-            List<NounInstance> results = new ArrayList<>();
-
-            for (NounInstance instance : cardToInstance.values()) {
-                String types = instance.getPropertyAs("types", String.class);
-                if (types != null && types.contains(cardType)) {
-                    results.add(instance);
-                }
-            }
-
-            return results;
+        public Map<String, NounDefinition> getZoneDefinitions() {
+            return Collections.unmodifiableMap(zoneDefinitions);
         }
 
-        /**
-         * Query creatures with specific power/toughness
-         */
-        public List<NounInstance> queryCreatures(int minPower, int minToughness) {
-            List<NounInstance> results = new ArrayList<>();
-
-            for (NounInstance instance : cardToInstance.values()) {
-                Boolean isCreature = instance.getPropertyAs("isCreature", Boolean.class);
-                if (Boolean.TRUE.equals(isCreature)) {
-                    try {
-                        String powerStr = instance.getPropertyAs("power", String.class);
-                        String toughnessStr = instance.getPropertyAs("toughness", String.class);
-
-                        if (powerStr != null && toughnessStr != null) {
-                            int power = Integer.parseInt(powerStr);
-                            int toughness = Integer.parseInt(toughnessStr);
-
-                            if (power >= minPower && toughness >= minToughness) {
-                                results.add(instance);
-                            }
-                        }
-                    } catch (NumberFormatException e) {
-                        // Handle special cases like * or X
-                        continue;
-                    }
-                }
-            }
-
-            return results;
+        public NounDefinition getZoneDefinition(String className) {
+            return zoneDefinitions.get(className);
         }
     }
+
+
+    public static final class PlayerDefinitionBuilder {
+        private static final Logger LOGGER = Logger.getLogger(PlayerDefinitionBuilder.class.getName());
+        private static final List<String> FALLBACK_MANA_KEYS =
+                java.util.Arrays.asList("W","U","B","R","G","C");
+
+        private final KnowledgeBase knowledgeBase;
+        private final Map<String, NounDefinition> playerDefinitions = new HashMap<>();
+
+        public PlayerDefinitionBuilder(KnowledgeBase knowledgeBase) {
+            this.knowledgeBase = knowledgeBase;
+        }
+
+        /** Build and register the canonical Player definition. */
+        public void buildAllPlayerDefinitions() {
+            register(buildPlayer());
+            LOGGER.info("Successfully built " + playerDefinitions.size() + " player definitions");
+        }
+
+        private void register(NounDefinition def) {
+            playerDefinitions.put(def.getClassName(), def);
+            knowledgeBase.registerDefinition(def);
+            LOGGER.fine("Registered player definition: " + def.getClassName());
+        }
+
+        /** Player — life, hand/deck params, mana pool, and player-scoped counters. */
+        private NounDefinition buildPlayer() {
+            NounDefinition.Builder b = new NounDefinition.Builder("Player")
+                    .description("Player entity: identity, life/hand, mana pool, and player counters.");
+
+            b.addStringProperty(
+                    "displayName",
+                    "",
+                    0, 60,
+                    MATCH_ANYTHING
+            ).addRequiredProperty("displayName");
+
+            // Life totals — CR 103.4, 119.1 (defaults to 20; formats may override at setup)
+            b.addIntProperty("startingLife", 20, 0, 200)
+                    .addIntProperty("life",         20, -1000, 1000);
+
+            // Hand size — CR 103.5 (starting hand size normally 7); max hand size — CR 402.2 (normally 7)
+            b.addIntProperty("startingHandSize", 7, 0, 14);
+            b.addIntProperty("maxHandSize",      7, 0, 99);
+
+            // Deck construction knobs (set per format at match bootstrap; defaults here are Constructed-like)
+            b.addIntProperty("deckMinSize", 60, 0, 500);
+
+            // Mana pool — keys strictly from your shared default; empties each step/phase (CR 106.4)
+            // Use a defensive copy so the prototype carries its own map instance.
+            final List<String> manaKeys = resolveManaKeys();               // <- see helper below
+            final Map<String,Integer> defaultMana = zeroedManaPool(manaKeys);
+
+            b.addMapProperty(
+                    "manaPool",
+                    defaultMana,
+                    String.class, Integer.class,
+                    new Domain.EnumDomain<>(String.class, manaKeys),           // only W/U/B/R/G/C (or your custom set)
+                    new Domain.IntDomain(0, 999),
+                    0,
+                    manaKeys.size()
+            );
+
+            // Helper toggle (lets your state tracker know to drain per step/phase)
+            b.addBooleanProperty("emptyManaPoolAtEndOfStepOrPhase", true);
+
+            // Player counters: open-ended by design (poison/energy/experience/etc.)
+            b.addMapProperty(
+                    "counters",
+                    new java.util.LinkedHashMap<String, Integer>(),  // default empty
+                    String.class,
+                    Integer.class,
+                    new Domain.StringDomain(1, 40, NON_EMPTY),       // key: counter name
+                    new Domain.IntDomain(0, 999),                    // value: >= 0
+                    0,
+                    128
+            );
+
+            // (Optional but convenient) table seating / meta
+            b.addIntProperty("seatIndex", 0, 0, 63);
+
+            return b.build();
+        }
+
+        // ===== Convenience: seed Player_1..Player_n instances with sane defaults =====
+
+        /** Create Player_1..Player_n if missing; leaves format-specific overrides to match bootstrap. */
+        public List<NounInstance> ensureDefaultPlayers(int n) {
+            if (n < 1) throw new IllegalArgumentException("n must be >= 1");
+            if (!playerDefinitions.containsKey("Player")) buildAllPlayerDefinitions();
+
+            final List<String> manaKeys = resolveManaKeys();
+            final Map<String,Integer> zeroPool = zeroedManaPool(manaKeys);
+            final Map<String,Integer> emptyCounters = new java.util.LinkedHashMap<>();
+
+            List<NounInstance> out = new ArrayList<>();
+            for (int i = 1; i <= n; i++) {
+                final String oid = "Player_" + i;
+                NounInstance inst = knowledgeBase.getInstance(oid);
+                if (inst == null) {
+                    inst = knowledgeBase.createInstance("Player", oid);
+                    Map<String,Object> init = new java.util.LinkedHashMap<>();
+                    init.put("displayName", "Player " + i);
+                    init.put("manaPool", zeroPool);
+                    init.put("counters", emptyCounters);
+                    init.put("seatIndex", i - 1);
+                    inst.updateProperties(init);
+                }
+                out.add(inst);
+            }
+            return out;
+        }
+
+        /** Prefer keys published by magic_commons (if you add them); otherwise use WUBRGC. */
+        private List<String> resolveManaKeys() {
+            try {
+                // If you later add magic_commons.MANA_KEYS, this will pick it up.
+                @SuppressWarnings("unchecked")
+                List<String> keys = (List<String>)magic_commons.class.getField("MANA_KEYS").get(null);
+                if (keys != null && !keys.isEmpty()) return new ArrayList<>(keys);
+            } catch (NoSuchFieldException | IllegalAccessException ignored) { }
+            return FALLBACK_MANA_KEYS;
+        }
+
+        private Map<String,Integer> zeroedManaPool(List<String> keys) {
+            Map<String,Integer> m = new java.util.LinkedHashMap<>();
+            for (String k : keys) m.put(k, 0);
+            return m;
+        }
+
+        public Map<String, NounDefinition> getPlayerDefinitions() {
+            return java.util.Collections.unmodifiableMap(playerDefinitions);
+        }
+
+        public NounDefinition getPlayerDefinition(String className) {
+            return playerDefinitions.get(className);
+        }
+    }
+
 
 
     public static final class Neo4jDefinitionBuilder {

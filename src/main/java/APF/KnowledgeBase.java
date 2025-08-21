@@ -33,8 +33,13 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         this.eventProcessors = new ArrayList<>();
 
         String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
-        ForgeBuilders.CardDefinitionBuilder definitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath, this);
-        definitionBuilder.buildAllCardDefinitions();
+        ForgeBuilders.CardDefinitionBuilder cardDefinitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath, this);
+        cardDefinitionBuilder.buildAllCardDefinitions();
+        ForgeBuilders.ZoneDefinitionBuilder zoneDefinitionBuilder = new ForgeBuilders.ZoneDefinitionBuilder(this);
+        zoneDefinitionBuilder.buildAllZoneDefinitions();
+        ForgeBuilders.PlayerDefinitionBuilder playerDefinitionBuilder = new ForgeBuilders.PlayerDefinitionBuilder(this);
+        playerDefinitionBuilder.buildAllPlayerDefinitions();
+
 
         neo4jBuilder = new ForgeBuilders.Neo4jDefinitionBuilder(this);
 
@@ -416,6 +421,11 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     public Void visit(GameEventDayTimeChanged event) { return null; }
     @Override
     public Void visit(GameEventDoorChanged event) { return null; }
+
+    public boolean hasInstance(String v) {
+        //TODO: Implement hasInstance
+        return false;
+    }
 
     // ========== Helper Methods ==========
 
