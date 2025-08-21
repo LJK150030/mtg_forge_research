@@ -1,7 +1,9 @@
 package com.example.research;
 
 import APF.ForgeBuilders;
+import APF.ForgeFactory;
 import APF.KnowledgeBase;
+import APF.MatchInstanceSeeder;
 import APF.magic_commons.*;
 import forge.ai.PlayerControllerAi;
 import forge.deck.*;
@@ -106,6 +108,17 @@ public class ForgeMatch {
                     output.println("✓ State transitions will be logged to: " + config.stateLogPath);
                 }
             }
+
+            APF.MatchInstanceSeeder seeder =
+                    new APF.MatchInstanceSeeder(knowledgeBase, new APF.ForgeFactory.CardInstanceFactory());
+
+            String matchId = "M-" + game.getTimestamp();
+            seeder.seedAll(game, matchId);
+
+            int playerInsts = knowledgeBase.getInstancesByClass("Player").size();
+            int handInsts   = knowledgeBase.getInstancesByClass("Zone_Hand").size();
+            output.printf("KB seeded → players=%d, Zone_Hand instances=%d, cardInstances=%d%n",
+                    playerInsts, handInsts, new APF.ForgeFactory.CardInstanceFactory().getAllInstances().size());
 
             // Step 7: Start the game
             match.startGame(game, null);

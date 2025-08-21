@@ -1146,35 +1146,6 @@ public final class ForgeBuilders {
             return b.build();
         }
 
-        // ===== Convenience: seed Player_1..Player_n instances with sane defaults =====
-
-        /** Create Player_1..Player_n if missing; leaves format-specific overrides to match bootstrap. */
-        public List<NounInstance> ensureDefaultPlayers(int n) {
-            if (n < 1) throw new IllegalArgumentException("n must be >= 1");
-            if (!playerDefinitions.containsKey("Player")) buildAllPlayerDefinitions();
-
-            final List<String> manaKeys = resolveManaKeys();
-            final Map<String,Integer> zeroPool = zeroedManaPool(manaKeys);
-            final Map<String,Integer> emptyCounters = new java.util.LinkedHashMap<>();
-
-            List<NounInstance> out = new ArrayList<>();
-            for (int i = 1; i <= n; i++) {
-                final String oid = "Player_" + i;
-                NounInstance inst = knowledgeBase.getInstance(oid);
-                if (inst == null) {
-                    inst = knowledgeBase.createInstance("Player", oid);
-                    Map<String,Object> init = new java.util.LinkedHashMap<>();
-                    init.put("displayName", "Player " + i);
-                    init.put("manaPool", zeroPool);
-                    init.put("counters", emptyCounters);
-                    init.put("seatIndex", i - 1);
-                    inst.updateProperties(init);
-                }
-                out.add(inst);
-            }
-            return out;
-        }
-
         /** Prefer keys published by magic_commons (if you add them); otherwise use WUBRGC. */
         private List<String> resolveManaKeys() {
             try {

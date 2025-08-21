@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 public class NounInstance {
     private final NounDefinition definition;
     private final String objectId;
-    private final Map<String, NounProperty> properties;  // Now using NounProperty for runtime state
+    private final Map<String, NounProperty> properties;
     private final Instant createdAt;
     private Instant lastModified;
     private Map<String, Object> metadata;
@@ -21,10 +21,16 @@ public class NounInstance {
     /**
      * Package-private constructor - instances should be created via NounDefinition.createInstance()
      */
+    /** Package-private constructor - instances should be created via NounDefinition.createInstance() */
     NounInstance(NounDefinition definition, String objectId) {
         this.definition = definition;
         this.objectId = objectId;
         this.properties = new HashMap<>();
+
+        for (Map.Entry<String, NounProperty> e : definition.getPropertyPrototypes().entrySet()) {
+            this.properties.put(e.getKey(), e.getValue().copy());
+        }
+
         this.createdAt = Instant.now();
         this.lastModified = createdAt;
         this.metadata = new HashMap<>();

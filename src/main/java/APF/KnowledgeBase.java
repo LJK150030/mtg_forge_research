@@ -71,21 +71,25 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         LOGGER.info("Registered definition: " + definition.getClassName());
     }
 
-    /**
-     * Create a new instance from a definition
-     */
-    public NounInstance createInstance(String className, String objectId) {
+    // inside class KnowledgeBase
+    public NounInstance createInstance(String className, String objectId, Map<String, Object> initialValues) {
         NounDefinition definition = nounDefinitions.get(className);
         if (definition == null) {
             throw new IllegalArgumentException("No definition found for class: " + className);
         }
-
         NounInstance instance = definition.createInstance(objectId);
+        if (initialValues != null && !initialValues.isEmpty()) {
+            instance.updateProperties(initialValues);
+        }
         instances.put(objectId, instance);
         instancesByClass.get(className).add(instance);
-
         LOGGER.info("Created instance: " + objectId + " of class: " + className);
         return instance;
+    }
+
+
+    public NounInstance createInstance(String className, String objectId) {
+        return createInstance(className, objectId, Collections.emptyMap());
     }
 
     public Map<String, NounDefinition> getNounDefinitions() {
@@ -143,6 +147,10 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
      */
     public void registerEventProcessor(EventProcessor processor) {
         eventProcessors.add(processor);
+    }
+
+    public NounDefinition getDefinition(String className) {
+        return nounDefinitions.get(className);
     }
 
     // ========== Visitor Pattern Implementation ==========
