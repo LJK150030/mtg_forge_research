@@ -270,4 +270,7 @@ public final class magic_commons {
             "Energy", "Experience", "Poison", "Rad", "Ticket"
     );
 
+    public static final Set<String> PLAYER_COUNTER_TYPES_SET = new HashSet<>(PLAYER_COUNTER_TYPES);
+
+
 }

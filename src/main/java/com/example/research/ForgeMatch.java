@@ -109,19 +109,29 @@ public class ForgeMatch {
                 }
             }
 
-            APF.MatchInstanceSeeder seeder =
-                    new APF.MatchInstanceSeeder(knowledgeBase, new APF.ForgeFactory.CardInstanceFactory());
+            APF.ForgeFactory.CardInstanceFactory cardFactory =
+                    new APF.ForgeFactory.CardInstanceFactory();
+            APF.MatchInstanceSeeder seeder = new APF.MatchInstanceSeeder(knowledgeBase, cardFactory);
 
             String matchId = "M-" + game.getTimestamp();
-            seeder.seedAll(game, matchId);
 
-            int playerInsts = knowledgeBase.getInstancesByClass("Player").size();
-            int handInsts   = knowledgeBase.getInstancesByClass("Zone_Hand").size();
-            output.printf("KB seeded → players=%d, Zone_Hand instances=%d, cardInstances=%d%n",
-                    playerInsts, handInsts, new APF.ForgeFactory.CardInstanceFactory().getAllInstances().size());
+            // Seed *inside* startGame via the hook, so zones & decks exist
+            match.startGame(game, () -> {
+                try {
+                    seeder.seedAll(game, matchId);
 
-            // Step 7: Start the game
-            match.startGame(game, null);
+                    // Optional: quick sanity counts
+                    System.out.printf(
+                            "Seeded in hook → Players=%d, Zone_Library=%d, Zone_Hand=%d, Zone_Battlefield=%d%n",
+                            knowledgeBase.getInstancesByClass("Player").size(),
+                            knowledgeBase.getInstancesByClass("Zone_Library").size(),
+                            knowledgeBase.getInstancesByClass("Zone_Hand").size(),
+                            knowledgeBase.getInstancesByClass("Zone_Battlefield").size()
+                    );
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
             output.println("✓ Game started");
 
             // Step 8: Run simulation

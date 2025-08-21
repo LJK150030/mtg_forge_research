@@ -42,7 +42,8 @@ public final class MatchInstanceSeeder {
         Map<Card, NounInstance> cards    = seedCards(game, matchId); // via CardInstanceFactory
         seedZones(game, matchId, players, cards);                     // uses created card ids
 
-        LOG.info(String.format("Seeding complete: %d players, %d cards.", players.size(), cards.size()));
+        LOG.info(String.format("Seeding complete: players created=%d enriched=%d, cards created=%d enriched=%d",
+                /* created */ 2, players.size(), /* created */ 40, cards.size()));
     }
 
     /* =========================== Players ============================ */
@@ -56,21 +57,24 @@ public final class MatchInstanceSeeder {
             String className   = findExistingClass("Player"); // your Player NounDefinition
 
             try {
-                Map<String,Object> overrides = new HashMap<>();
-                overrides.put("name", p.getName());
-                overrides.put("life", p.getLife());
-                overrides.put("startingLife", p.getStartingLife());
-                overrides.put("poisonCounters", p.getPoisonCounters());
-                overrides.put("isAI", p.getController() != null && p.getController().isAI());
-                overrides.put("maxHandSize", p.getMaxHandSize());
+                NounInstance inst = kb.createInstance(className, objectId);
+
+                // set only known properties — one by one
+                safeSet(inst, "name", p.getName());
+                safeSet(inst, "life", p.getLife());
+                safeSet(inst, "startingLife", p.getStartingLife());
+                safeSet(inst, "isAI", p.getController() != null && p.getController().isAI());
+                safeSet(inst, "maxHandSize", p.getMaxHandSize());
+
+                // unified counters map (poison/energy/etc.)
                 Map<String,Integer> counters = new LinkedHashMap<>();
                 p.getCounters().forEach((ct, amt) -> counters.put(ct.toString(), amt));
-                overrides.put("counters", counters);
-                Map<String,Integer> mana = snapshotMana(p.getManaPool());
-                if (!mana.isEmpty()) overrides.put("manaPool", mana);
+                safeSet(inst, "counters", counters);
 
-                NounInstance inst =  kb.createInstance(className, objectId);
-                inst.updateProperties(overrides);
+                // mana pool snapshot
+                Map<String,Integer> mana = snapshotMana(p.getManaPool());
+                if (!mana.isEmpty()) safeSet(inst, "manaPool", mana);
+
 
                 inst.getMetadata().put("matchId", matchId);
                 inst.getMetadata().put("forgePlayerName", p.getName());
@@ -119,7 +123,9 @@ public final class MatchInstanceSeeder {
         // Plus battlefield (global)
         try {
             for (Card c : game.getCardsIn(ZoneType.Battlefield)) allCards.add(c);
-        } catch (Throwable ignored) {}
+        } catch (Throwable ex) {
+            LOG.warning("Failed to create zone instance " + ZoneType.Battlefield + ": " + ex.getMessage());
+        }
 
         // Create/reuse instances via CardInstanceFactory
         for (Card c : allCards) {

@@ -182,19 +182,23 @@ public final class ForgeBuilders {
                             0,
                             9999
                     ).addRequiredProperty("convertedManaCost");
-
-
-                    // Color identity
-                    builder.addListProperty(
-                            "colorIdentity",
-                            calculateColorIdentity(formattedManaCost,  cardData.get("Oracle")),
-                            String.class,
-                            CARD_COLOR_ID,
-                            0,
-                            5,
-                            false).addRequiredProperty("colorIdentity");
                 }
             }
+
+            String formattedManaCost = cardData.containsKey("ManaCost") && !cardData.get("ManaCost").contains("no cost")
+                    ? formatManaCost(cardData.get("ManaCost"))
+                    : "";
+
+            List<String> colorId = calculateColorIdentity(formattedManaCost, cardData.get("Oracle"));
+
+            builder.addListProperty(
+                    "colorIdentity",
+                    (colorId == null ? java.util.Collections.emptyList() : colorId),
+                    String.class,
+                    CARD_COLOR_ID,
+                    0, 5,
+                    false
+            ).addRequiredProperty("colorIdentity");
 
             // Parse Types and Subtypes separately
             ParsedTypes parsed = parseTypesAndSubtypes(typesLine);
@@ -282,18 +286,15 @@ public final class ForgeBuilders {
             }
 
             // Keywords - now properly extracts from K: lines
-            List<String> keywords = extractKeywords(cardData);
-            if (!keywords.isEmpty()) {
-                builder.addListProperty(
-                        "keywords",
-                        keywords,
-                        String.class,
-                        KEYWORD_ABILITIES,
-                        0,
-                        16,
-                        false
-                );
-            }
+            List<String> keywords = extractKeywords(cardData); // may be empty
+            builder.addListProperty(
+                    ( "keywords" ),
+                    (keywords == null ? java.util.Collections.emptyList() : keywords),
+                    String.class,
+                    KEYWORD_ABILITIES,
+                    0, 16,
+                    false
+            );
 
             // Abilities - from A:, T:, S: lines
             List<String> abilities = extractAbilities(cardData);
@@ -357,13 +358,11 @@ public final class ForgeBuilders {
 
             builder.addMapProperty(
                     "counters",
-                    new java.util.LinkedHashMap<String, Integer>(),  // default empty
-                    String.class,
-                    Integer.class,
-                    new Domain.StringDomain(1, 40, NON_EMPTY),   // key: counter name
-                    new Domain.IntDomain(0, 999),                       // value: non-negative count
-                    0,                                               // min entries
-                    128                                              // max entries (tweak as you like)
+                    new java.util.LinkedHashMap<String, Integer>(),
+                    String.class, Integer.class,
+                    new Domain.EnumDomain<>(String.class, CARD_COUNTER_TYPES),
+                    new Domain.IntDomain(0, 999),
+                    0, 128
             );
 
             return builder.build();
@@ -766,12 +765,12 @@ public final class ForgeBuilders {
                     true
             );
 
-            Domain<String> idRef = new Domain.KBRefDomain(knowledgeBase, "^(Card_|Token_).+");
+            Domain<String> idRef = new Domain.KBRefDomain(knowledgeBase, "^(?i)(card_|token_).+");
 
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+                    contentsDomain("^(?i)(card_|token_).+", 0, 10000)
             );
 
             // Shared zone marker
@@ -1131,13 +1130,11 @@ public final class ForgeBuilders {
             // Player counters: open-ended by design (poison/energy/experience/etc.)
             b.addMapProperty(
                     "counters",
-                    new java.util.LinkedHashMap<String, Integer>(),  // default empty
-                    String.class,
-                    Integer.class,
-                    new Domain.StringDomain(1, 40, NON_EMPTY),       // key: counter name
-                    new Domain.IntDomain(0, 999),                    // value: >= 0
-                    0,
-                    128
+                    new java.util.LinkedHashMap<String, Integer>(),
+                    String.class, Integer.class,
+                    new Domain.EnumDomain<>(String.class, PLAYER_COUNTER_TYPES),
+                    new Domain.IntDomain(0, 999),
+                    0, 128
             );
 
             // (Optional but convenient) table seating / meta

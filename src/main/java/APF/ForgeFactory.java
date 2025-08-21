@@ -10,6 +10,8 @@ import forge.game.zone.ZoneType;
 import java.util.*;
 import java.util.logging.Logger;
 
+import static APF.magic_commons.KEYWORD_ABILITY_SET;
+
 /**
  * === Instance Factories for Zone and Player ===
  * Add this to the same file where CardInstanceFactory lives (e.g., ForgeBuilders.java).
@@ -84,8 +86,11 @@ public final class ForgeFactory {
 
             // Mana cost and CMC
             if (card.getManaCost() != null) {
-                properties.put("manaCost", card.getManaCost().toString());
-                properties.put("convertedManaCost", card.getCMC());
+                String mc = String.valueOf(card.getManaCost());
+                if (mc != null && !mc.isBlank()) {
+                    properties.put("manaCost", mc);
+                    properties.put("convertedManaCost", card.getCMC());
+                }
             }
 
 
@@ -97,11 +102,11 @@ public final class ForgeFactory {
 
             // Keywords
             List<String> keywords = new ArrayList<>();
-            for (KeywordInterface keyword : card.getKeywords()) {
-                keywords.add(keyword.toString());
+            for (KeywordInterface kw : card.getKeywords()) {
+                String canon = canonicalizeKeyword(kw.toString());
+                if (canon != null) keywords.add(canon);
             }
             properties.put("keywords", keywords);
-
             // Oracle text
             properties.put("oracleText", card.getOracleText());
 
@@ -117,8 +122,8 @@ public final class ForgeFactory {
             // Game state properties
             if (card.getGame() != null) {
                 properties.put("zone", List.of(card.getZone() != null ? card.getZone().getZoneType().name() : "Library"));
-                properties.put("controller", List.of(card.getController() != null ? card.getController().getName() : "NULL"));
-                properties.put("owner", List.of(card.getOwner() != null ? card.getOwner().getName() : "NULL"));
+                properties.put("controller", List.of(playerEnum(card.getController())));
+                properties.put("owner",      List.of(playerEnum(card.getOwner())));
                 properties.put("tapped", card.isTapped());
                 properties.put("summoningSick", card.hasSickness());
 
@@ -131,6 +136,12 @@ public final class ForgeFactory {
             }
 
             return properties;
+        }
+
+        private static String playerEnum(Player p) {
+            if (p == null) return "NULL";
+            int idx = p.getGame().getPlayers().indexOf(p) + 1;
+            return "Player_" + Math.max(1, idx);
         }
 
         private String generateInstanceId(Card card) {
@@ -249,6 +260,27 @@ public final class ForgeFactory {
             }
 
             return results;
+        }
+
+        private static String canonicalizeKeyword(String raw) {
+            if (raw == null) return null;
+            String s = raw.trim();
+
+            // strip bracket noise like "[...]" if present
+            if (s.startsWith("[") && s.endsWith("]") && s.length() >= 2) {
+                s = s.substring(1, s.length() - 1).trim();
+            }
+
+            String u = s.toUpperCase(java.util.Locale.ROOT);
+
+            // not a keyword: drop common static/ability phrases
+            if (u.contains("ENTERS THE BATTLEFIELD TAPPED")) return null;
+
+            // normalize "Enchant:creature", "Enchant creature", etc.
+            if (u.startsWith("ENCHANT")) return "Enchant";
+
+            // keep only canonical keywords your domain allows
+            return KEYWORD_ABILITY_SET.contains(s) ? s : null;
         }
     }
 
