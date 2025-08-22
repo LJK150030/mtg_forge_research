@@ -183,6 +183,23 @@ public final class ForgeBuilders {
                             9999
                     ).addRequiredProperty("convertedManaCost");
                 }
+                else
+                {
+                    builder.addStringProperty(
+                            "manaCost",
+                            "{0}",
+                            0,
+                            100,
+                            FULL_BRACED
+                    ).addRequiredProperty("manaCost");
+
+                    builder.addIntProperty(
+                            "convertedManaCost",
+                            0,
+                            0,
+                            9999
+                    ).addRequiredProperty("convertedManaCost");
+                }
             }
 
             String formattedManaCost = cardData.containsKey("ManaCost") && !cardData.get("ManaCost").contains("no cost")
@@ -765,12 +782,10 @@ public final class ForgeBuilders {
                     true
             );
 
-            Domain<String> idRef = new Domain.KBRefDomain(knowledgeBase, "^(?i)(card_|token_).+");
-
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(?i)(card_|token_).+", 0, 10000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 10000)
             );
 
             // Shared zone marker
@@ -812,7 +827,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_|Emblem_|Dungeon_|Plane_|Phenomenon_|Scheme_|Vanguard_).+", 0, 10000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 10000)
             );
 
             return b.build();
@@ -855,7 +870,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 10000)
             );
 
             return b.build();
@@ -898,7 +913,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 10000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 10000)
             );
 
             return b.build();
@@ -946,7 +961,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 100000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 100000)
             );
 
             return b.build();
@@ -996,7 +1011,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 64)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 64)
             );
 
             return b.build();
@@ -1039,7 +1054,7 @@ public final class ForgeBuilders {
             b.addProperty(
                     "contents",
                     new ArrayList<String>(),
-                    contentsDomain("^(Card_|Token_).+", 0, 2000)
+                    contentsDomain("^(?:card|token)_(?:0|[1-9]\\d*)_\\d{13}$", 0, 2000)
             );
 
             return b.build();

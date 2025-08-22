@@ -234,7 +234,7 @@ public final class magic_commons {
 
 
     public static final List<String> ZONE_TYPES = Arrays.asList(
-            "Ante", "Battlefield", "Command", "Exile", "Graveyard", "Hand", "Library", "Stack"
+            "Battlefield", "Exile", "Graveyard", "Hand", "Library", "Stack"
     );
 
     public static final Set<String> ZONE_TYPES_SET = new HashSet<>(ZONE_TYPES);

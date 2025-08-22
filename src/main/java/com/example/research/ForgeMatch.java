@@ -119,15 +119,6 @@ public class ForgeMatch {
             match.startGame(game, () -> {
                 try {
                     seeder.seedAll(game, matchId);
-
-                    // Optional: quick sanity counts
-                    System.out.printf(
-                            "Seeded in hook → Players=%d, Zone_Library=%d, Zone_Hand=%d, Zone_Battlefield=%d%n",
-                            knowledgeBase.getInstancesByClass("Player").size(),
-                            knowledgeBase.getInstancesByClass("Zone_Library").size(),
-                            knowledgeBase.getInstancesByClass("Zone_Hand").size(),
-                            knowledgeBase.getInstancesByClass("Zone_Battlefield").size()
-                    );
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

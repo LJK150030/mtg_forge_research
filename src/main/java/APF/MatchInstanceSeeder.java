@@ -11,6 +11,8 @@ import forge.card.mana.ManaAtom;
 import java.util.*;
 import java.util.logging.Logger;
 
+import static APF.magic_commons.ZONE_TYPES_SET;
+
 /**
  * Seed NounInstances for one Forge match: players, cards, zones.
  *
@@ -200,8 +202,25 @@ public final class MatchInstanceSeeder {
         return matchId + "::" + plainId;
     }
 
+    private static Set<ZoneType> monitoredZones() {
+        EnumSet<ZoneType> result = EnumSet.noneOf(ZoneType.class);
+        for (String name : ZONE_TYPES_SET) {
+            try {
+                ZoneType zt = ZoneType.smartValueOf(name);
+                if (zt != null) {
+                    result.add(zt);
+                }
+            } catch (IllegalArgumentException ignore) {
+                // Unknown zone name in ZONE_TYPES_SET — safely skip
+            }
+        }
+        return Collections.unmodifiableSet(result);
+    }
+
     private static Set<ZoneType> perPlayerZones() {
-        return EnumSet.of(ZoneType.Library, ZoneType.Hand, ZoneType.Graveyard, ZoneType.Exile, ZoneType.Sideboard);
+        EnumSet<ZoneType> perPlayer = EnumSet.noneOf(ZoneType.class);
+        perPlayer.addAll(monitoredZones());
+        return Collections.unmodifiableSet(perPlayer);
     }
 
     private static String zoneClass(ZoneType zt) {
