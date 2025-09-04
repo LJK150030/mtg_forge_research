@@ -15,6 +15,7 @@ public class NounDefinition {
     private final String description;
     private final Map<String, NounProperty> propertyPrototypes;  // Using NounProperty as the schema
     private final Set<String> requiredProperties;
+    private final Set<VerbDefinition> availableVerbs = new HashSet<>();
 
     private NounDefinition(Builder builder) {
         this.className = builder.className;
@@ -69,6 +70,20 @@ public class NounDefinition {
         }
 
         return true;
+    }
+
+    public void addVerb(VerbDefinition v) {
+        availableVerbs.add(v);
+    }
+    public boolean hasVerb(VerbDefinition v) {
+        return availableVerbs.contains(v);
+    }
+
+    public boolean hasVerbNamed(String name) {
+        return availableVerbs.stream().anyMatch(v -> name.equals(v.name()));
+    }
+    public java.util.Set<VerbDefinition> getAvailableVerbs() {
+        return java.util.Collections.unmodifiableSet(availableVerbs);
     }
 
     /**

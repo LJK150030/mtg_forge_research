@@ -28,6 +28,9 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     private final Map<String, NounInstance> nounInstances;
     private final Map<String, List<NounInstance>> instancesByClass;
 
+    private final Map<String, VerbDefinition> verbDefinitions;
+
+
     private final List<VerbInstance> verbHistory;
 
     private final ForgeBuilders.Neo4jDefinitionBuilder neo4jDefinitionBuilder;
@@ -41,6 +44,8 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         this.nounDefinitions = new ConcurrentHashMap<>();
         this.nounInstances = new ConcurrentHashMap<>();
         this.instancesByClass = new ConcurrentHashMap<>();
+
+        this.verbDefinitions = new ConcurrentHashMap<>();
 
         this.verbHistory = Collections.synchronizedList(new ArrayList<>());
 
@@ -92,6 +97,10 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         return playerFactory;
     }
 
+    public VerbDefinition getVerb(String name) {
+        return verbDefinitions.get(name);
+    }
+
     public List<VerbInstance> getVerbHistory() {
         return verbHistory;
     }
@@ -109,6 +118,11 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         nounDefinitions.put(definition.getClassName(), definition);
         instancesByClass.putIfAbsent(definition.getClassName(), new ArrayList<>());
         LOGGER.info("Registered definition: " + definition.getClassName());
+    }
+
+    private void registerCommonVerbs() {
+        VerbDefinition tap = ForgeCommonVerbs.tapVerb();
+        verbDefinitions.put(tap.name(), tap);
     }
 
     // inside class KnowledgeBase
