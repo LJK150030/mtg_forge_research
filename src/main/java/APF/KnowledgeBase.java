@@ -34,13 +34,13 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     private final ForgeFactory.Neo4jInstanceBuilder neo4jInstanceBuilder;
 
     // Event processing - custom processors for extensibility
-    private final List<EventProcessor> eventProcessors;
+    private Game subscribedGame;
+    private KBEventListener eventListener;
 
     private KnowledgeBase() {
         this.nounDefinitions = new ConcurrentHashMap<>();
         this.nounInstances = new ConcurrentHashMap<>();
         this.instancesByClass = new ConcurrentHashMap<>();
-        this.eventProcessors = new ArrayList<>();
 
         this.verbHistory = Collections.synchronizedList(new ArrayList<>());
 
@@ -176,29 +176,16 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         return null;
     }
 
+    public synchronized void subscribeToGame(Game game) {
+        if (game == null) return;
+        // Already subscribed? Do nothing.
+        if (this.subscribedGame == game && this.eventListener != null) return;
 
-    /**
-     * Process a game event
-     */
-    public void processEvent(GameEvent event) {
-        try {
-            // Use visitor pattern - this calls the appropriate visit() method
-            event.visit(this);
-
-            // Also process with custom processors for extensibility
-            for (EventProcessor processor : eventProcessors) {
-                processor.process(event, this);
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error processing event: " + event.getClass().getSimpleName(), e);
-        }
-    }
-
-    /**
-     * Register a custom event processor for additional logic
-     */
-    public void registerEventProcessor(EventProcessor processor) {
-        eventProcessors.add(processor);
+        // No explicit unsubscription—just avoid double registration.
+        this.eventListener = new KBEventListener(this);
+        game.subscribeToEvents(this.eventListener);
+        this.subscribedGame = game;
+        LOGGER.info("KnowledgeBase subscribed to Forge game events.");
     }
 
     public NounDefinition getDefinition(String className) {
@@ -529,15 +516,4 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     public Void visit(GameEventDoorChanged event) { return null; }
 
     public void recordEvent(String type, Map<String,Object> payload) { /* your impl */ }
-
-    // ========== Helper Methods ==========
-
-    /**
-     * Interface for custom event processors
-     * This allows extensibility - users can add additional processing logic
-     * without modifying the core visitor implementation
-     */
-    public interface EventProcessor {
-        void process(GameEvent event, KnowledgeBase kb);
-    }
 }

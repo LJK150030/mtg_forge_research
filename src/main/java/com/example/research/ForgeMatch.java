@@ -109,6 +109,8 @@ public class ForgeMatch {
                 }
             }
 
+            knowledgeBase.subscribeToGame(game);
+
             APF.ForgeFactory.CardInstanceFactory cardFactory = new APF.ForgeFactory.CardInstanceFactory();
             ForgeFactory.PlayerInstanceFactory playerFactory = new APF.ForgeFactory.PlayerInstanceFactory();
 
