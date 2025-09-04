@@ -1,5 +1,6 @@
 package APF;
 
+import com.example.research.Neo4jService;
 import forge.game.card.Card;
 import forge.game.card.CounterType;
 import forge.game.keyword.KeywordInterface;
@@ -9,6 +10,7 @@ import forge.game.zone.ZoneType;
 
 import java.util.*;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import static APF.magic_commons.KEYWORD_ABILITY_SET;
 
@@ -68,7 +70,7 @@ public final class ForgeFactory {
             String instanceId = generateInstanceId(card);
             Map<String, Object> initialValues = extractCardProperties(card);
 
-            NounInstance instance = knowledgeBase.createInstance(definition.getClassName(), instanceId);
+            NounInstance instance = knowledgeBase.createNounInstance(definition.getClassName(), instanceId);
             instance.updateProperties(initialValues);
 
             cardToInstance.put(card, instance);
@@ -318,7 +320,7 @@ public final class ForgeFactory {
             Map<String, Object> overrides = new HashMap<>();
             overrides.put("owner", hasOwner ? ownerId : "NULL");  // will no-op if property doesn't exist
 
-            NounInstance inst = kb.createInstance(zoneClassName, instanceId, overrides);
+            NounInstance inst = kb.createNounInstance(zoneClassName, instanceId, overrides);
 
             // Ensure contents list exists if that property is part of the definition
             @SuppressWarnings("unchecked")
@@ -331,7 +333,7 @@ public final class ForgeFactory {
     }
 
     /** Makes NounInstances for Players based on Player_* definitions. */
-    public class PlayerInstanceFactory {
+    public static class PlayerInstanceFactory {
         private static final Logger LOGGER = Logger.getLogger(PlayerInstanceFactory.class.getName());
         private final KnowledgeBase kb;
         private final Map<forge.game.player.Player, NounInstance> playerToInstance = new HashMap<>();
@@ -363,7 +365,7 @@ public final class ForgeFactory {
             if (startingMana != null) overrides.put("manaPool", startingMana);
             if (startingCounters != null) overrides.put("counters", startingCounters);
 
-            NounInstance inst = kb.createInstance(playerClassName, playerId, overrides);
+            NounInstance inst = kb.createNounInstance(playerClassName, playerId, overrides);
 
             if (forgePlayerRef != null) {
                 playerToInstance.put(forgePlayerRef, inst);
@@ -379,4 +381,163 @@ public final class ForgeFactory {
         }
     }
 
+
+    public static final class Neo4jInstanceBuilder {
+        private static final Logger LOGGER = Logger.getLogger(Neo4jInstanceBuilder.class.getName());
+
+        private final Neo4jService neo4jService;
+        private final KnowledgeBase kb;
+
+        public Neo4jInstanceBuilder(KnowledgeBase kb) {
+            this.kb = kb;
+            this.neo4jService = Neo4jService.getInstance();
+        }
+
+        /** One-time constraint + helpful index. Safe to call multiple times. */
+        public void createIndexes() {
+            neo4jService.writeTransaction(tx -> {
+                tx.run("CREATE CONSTRAINT noun_instance_id IF NOT EXISTS " +
+                        "FOR (n:NounInstance) REQUIRE n.objectId IS UNIQUE");
+                tx.run("CREATE INDEX noun_instance_class IF NOT EXISTS " +
+                        "FOR (n:NounInstance) ON (n.className)");
+                LOGGER.info("Created/verified indexes for NounInstance nodes");
+                return null;
+            });
+        }
+
+        /** Optional: wipe all instances (useful during rebuilds). */
+        public void clearAllInstances() {
+            neo4jService.writeTransaction(tx -> {
+                tx.run("MATCH (d:NounDefinition)-[r:instance]->(i:NounInstance) DELETE r");
+                tx.run("MATCH (i:NounInstance) DETACH DELETE i");
+                LOGGER.info("Cleared all NounInstance nodes (and instance relationships).");
+                return null;
+            });
+        }
+
+        /** Upsert a single instance and MERGE the (:NounDefinition)-[:instance]->(:NounInstance) link. */
+        public void buildNounInstance(NounInstance inst) {
+            String className = inst.getDefinition().getClassName();
+            String objectId  = inst.getObjectId();
+
+            // Snapshot the instance’s current property VALUES (no schema here).
+            Map<String, Object> values = inst.getProperties()
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> normalizeValueForNeo4j(e.getValue().getValue()),
+                            (a, b) -> b,
+                            LinkedHashMap::new
+                    ));
+
+            List<String> propNames = new ArrayList<>(values.keySet());
+            int propCount = values.size();
+
+            String valuesJson = convertMapToJson(values);
+
+            neo4jService.writeTransaction(tx -> {
+                String cypher =
+                        "MERGE (i:NounInstance {objectId: $objectId}) " +
+                                "SET  i.className      = $className, " +
+                                "     i.values         = $valuesJson, " +         // JSON string of current values
+                                "     i.propertyNames  = $propNames, " +
+                                "     i.propertyCount  = $propCount, " +
+                                "     i.lastUpdated    = datetime() " +
+                                "WITH i " +
+                                "MATCH (d:NounDefinition {className: $className}) " +
+                                "MERGE (d)-[:instance]->(i) " +
+                                "RETURN i";
+
+                Map<String, Object> params = Map.of(
+                        "objectId",   objectId,
+                        "className",  className,
+                        "valuesJson", valuesJson,
+                        "propNames",  propNames,
+                        "propCount",  propCount
+                );
+
+                tx.run(cypher, params);
+                return null;
+            });
+
+            LOGGER.fine(() -> "Upserted NounInstance " + objectId + " and linked from " + className);
+        }
+
+        /** Bulk-export everything currently in the KB. */
+        public void buildAllNounInstances() {
+            for (String className : kb.getNounDefinitions().keySet()) {
+                for (NounInstance inst : kb.getInstancesByClass(className)) {
+                    buildNounInstance(inst);
+                }
+            }
+            LOGGER.info("Exported all NounInstances currently in KnowledgeBase.");
+        }
+
+        // ---------- helpers ----------
+
+        /** Normalize nested values to be storable as Neo4j properties (we keep a JSON blob on node). */
+        private Object normalizeValueForNeo4j(Object v) {
+            if (v == null) return null;
+            if (v instanceof Map) {
+                // Keep maps as JSON text
+                return convertMapToJson((Map<?, ?>) v);
+            }
+            if (v instanceof Collection) {
+                // Coerce collection items to simple/strings to satisfy Neo4j property rules
+                List<Object> out = new ArrayList<>();
+                for (Object o : (Collection<?>) v) {
+                    out.add(o == null ? null : (isPrimitiveLike(o) ? o : o.toString()));
+                }
+                return out;
+            }
+            return isPrimitiveLike(v) ? v : v.toString();
+        }
+
+        private boolean isPrimitiveLike(Object o) {
+            return (o instanceof String) || (o instanceof Number) || (o instanceof Boolean);
+        }
+
+        /** Simple JSON string (mirrors the approach used by Neo4jDefinitionBuilder). */
+        private String convertMapToJson(Object obj) {
+            if (obj == null) return "{}";
+            if (!(obj instanceof Map)) return "\"" + obj.toString() + "\"";
+
+            Map<?, ?> map = (Map<?, ?>) obj;
+            if (map.isEmpty()) return "{}";
+
+            StringBuilder json = new StringBuilder("{");
+            boolean first = true;
+
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!first) json.append(", ");
+                first = false;
+
+                json.append("\"").append(entry.getKey()).append("\": ");
+                Object value = entry.getValue();
+
+                if (value instanceof String) {
+                    json.append("\"").append(value).append("\"");
+                } else if (value instanceof Collection) {
+                    json.append("[");
+                    boolean firstItem = true;
+                    for (Object item : (Collection<?>) value) {
+                        if (!firstItem) json.append(", ");
+                        firstItem = false;
+                        json.append("\"").append(item).append("\"");
+                    }
+                    json.append("]");
+                } else if (value instanceof Map) {
+                    json.append(convertMapToJson(value));
+                } else if (value == null) {
+                    json.append("null");
+                } else {
+                    json.append(value.toString());
+                }
+            }
+
+            json.append("}");
+            return json.toString();
+        }
+    }
 }
+

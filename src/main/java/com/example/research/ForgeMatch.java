@@ -64,7 +64,7 @@ public class ForgeMatch {
             aiPlayer1.setAiProfile("Default");
 
             ForgePlayerAI  aiPlayer2 = new ForgePlayerAI(PLAYERS.get(2));
-            aiPlayer2.setAiProfile("Gambler");
+            aiPlayer2.setAiProfile("Default");
 
             aiPlayer1.setAllowCheatShuffle(false);
             aiPlayer2.setAllowCheatShuffle(false);
@@ -109,16 +109,19 @@ public class ForgeMatch {
                 }
             }
 
-            APF.ForgeFactory.CardInstanceFactory cardFactory =
-                    new APF.ForgeFactory.CardInstanceFactory();
+            APF.ForgeFactory.CardInstanceFactory cardFactory = new APF.ForgeFactory.CardInstanceFactory();
+            ForgeFactory.PlayerInstanceFactory playerFactory = new APF.ForgeFactory.PlayerInstanceFactory();
+
+            knowledgeBase.setCardFactory(cardFactory);
+            knowledgeBase.setPlayerFactory(playerFactory);
+
             APF.MatchInstanceSeeder seeder = new APF.MatchInstanceSeeder(knowledgeBase, cardFactory);
 
             String matchId = "M-" + game.getTimestamp();
-
-            // Seed *inside* startGame via the hook, so zones & decks exist
             match.startGame(game, () -> {
                 try {
                     seeder.seedAll(game, matchId);
+                    knowledgeBase.exportAllInstancesToNeo4j();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

@@ -59,7 +59,7 @@ public final class MatchInstanceSeeder {
             String className   = findExistingClass("Player"); // your Player NounDefinition
 
             try {
-                NounInstance inst = kb.createInstance(className, objectId);
+                NounInstance inst = kb.createNounInstance(className, objectId);
 
                 // set only known properties — one by one
                 safeSet(inst, "name", p.getName());
@@ -171,7 +171,7 @@ public final class MatchInstanceSeeder {
                 overrides.put("owner", ownerEnum);
                 overrides.put("contents", contents);
 
-                NounInstance zi =  kb.createInstance(className, objectId);
+                NounInstance zi =  kb.createNounInstance(className, objectId);
                 zi.updateProperties(overrides);
                 zi.getMetadata().put("matchId", matchId);
             }
@@ -189,7 +189,7 @@ public final class MatchInstanceSeeder {
             Map<String,Object> overrides = new HashMap<>();
             overrides.put("owner", "NULL");
             overrides.put("contents", contents);
-            NounInstance zi  = kb.createInstance(className, objectId);
+            NounInstance zi  = kb.createNounInstance(className, objectId);
             zi.updateProperties(overrides);
 
             zi.getMetadata().put("matchId", matchId);

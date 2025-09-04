@@ -63,6 +63,7 @@ public class ForgeApp {
      * Configuration class for ForgeApp
      */
     public static class ForgeConfig {
+        //public String cardDataDir = "D:\\my_files\\cards";
         public String cardDataDir = "D:\\my_files\\cards";
         public String resDir = "res";
         public String cacheDir = "cache";

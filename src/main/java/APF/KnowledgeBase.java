@@ -1,6 +1,10 @@
 package APF;
 
+import forge.game.Game;
 import forge.game.event.*;
+import forge.game.player.Player;
+import forge.game.card.Card;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -16,21 +20,29 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
 
     // Singleton instance
     private static KnowledgeBase instance;
+    private ForgeFactory.CardInstanceFactory cardFactory;
+    private ForgeFactory.PlayerInstanceFactory playerFactory;
 
     // Storage
     private final Map<String, NounDefinition> nounDefinitions;
-    private final Map<String, NounInstance> instances;
+    private final Map<String, NounInstance> nounInstances;
     private final Map<String, List<NounInstance>> instancesByClass;
-    private final ForgeBuilders.Neo4jDefinitionBuilder neo4jBuilder;
+
+    private final List<VerbInstance> verbHistory;
+
+    private final ForgeBuilders.Neo4jDefinitionBuilder neo4jDefinitionBuilder;
+    private final ForgeFactory.Neo4jInstanceBuilder neo4jInstanceBuilder;
 
     // Event processing - custom processors for extensibility
     private final List<EventProcessor> eventProcessors;
 
     private KnowledgeBase() {
         this.nounDefinitions = new ConcurrentHashMap<>();
-        this.instances = new ConcurrentHashMap<>();
+        this.nounInstances = new ConcurrentHashMap<>();
         this.instancesByClass = new ConcurrentHashMap<>();
         this.eventProcessors = new ArrayList<>();
+
+        this.verbHistory = Collections.synchronizedList(new ArrayList<>());
 
         String cardsfolderPath = "res/cardsfolder"; // Adjust path as needed
         ForgeBuilders.CardDefinitionBuilder cardDefinitionBuilder = new ForgeBuilders.CardDefinitionBuilder(cardsfolderPath, this);
@@ -41,11 +53,12 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         playerDefinitionBuilder.buildAllPlayerDefinitions();
 
 
-        neo4jBuilder = new ForgeBuilders.Neo4jDefinitionBuilder(this);
+        neo4jDefinitionBuilder = new ForgeBuilders.Neo4jDefinitionBuilder(this);
+        neo4jInstanceBuilder = new ForgeFactory.Neo4jInstanceBuilder(this);
 
-        neo4jBuilder.clearAllDefinitions();
-        neo4jBuilder.createIndexes();
-        neo4jBuilder.buildAllNounDefinitions();
+        neo4jDefinitionBuilder.clearAllDefinitions();
+        neo4jDefinitionBuilder.createIndexes();
+        neo4jDefinitionBuilder.buildAllNounDefinitions();
     }
 
     /**
@@ -62,6 +75,33 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         return instance;
     }
 
+    public void setCardFactory(ForgeFactory.CardInstanceFactory f) {
+        this.cardFactory = f;
+    }
+
+    public void setPlayerFactory(ForgeFactory.PlayerInstanceFactory f) {
+        this.playerFactory = f;
+    }
+
+
+    public ForgeFactory.CardInstanceFactory getCardFactory() {
+        return cardFactory;
+    }
+
+    public ForgeFactory.PlayerInstanceFactory getPlayerFactory() {
+        return playerFactory;
+    }
+
+    public List<VerbInstance> getVerbHistory() {
+        return verbHistory;
+    }
+
+
+    public void exportAllInstancesToNeo4j() {
+        neo4jInstanceBuilder.createIndexes();
+        neo4jInstanceBuilder.buildAllNounInstances();
+    }
+
     /**
      * Register a NounDefinition
      */
@@ -72,7 +112,7 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     }
 
     // inside class KnowledgeBase
-    public NounInstance createInstance(String className, String objectId, Map<String, Object> initialValues) {
+    public NounInstance createNounInstance(String className, String objectId, Map<String, Object> initialValues) {
         NounDefinition definition = nounDefinitions.get(className);
         if (definition == null) {
             throw new IllegalArgumentException("No definition found for class: " + className);
@@ -81,15 +121,15 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
         if (initialValues != null && !initialValues.isEmpty()) {
             instance.updateProperties(initialValues);
         }
-        instances.put(objectId, instance);
+        nounInstances.put(objectId, instance);
         instancesByClass.get(className).add(instance);
         LOGGER.info("Created instance: " + objectId + " of class: " + className);
         return instance;
     }
 
 
-    public NounInstance createInstance(String className, String objectId) {
-        return createInstance(className, objectId, Collections.emptyMap());
+    public NounInstance createNounInstance(String className, String objectId) {
+        return createNounInstance(className, objectId, Collections.emptyMap());
     }
 
     public Map<String, NounDefinition> getNounDefinitions() {
@@ -100,7 +140,7 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
      * Get an instance by ID
      */
     public NounInstance getInstance(String objectId) {
-        return instances.get(objectId);
+        return nounInstances.get(objectId);
     }
 
     /**
@@ -124,6 +164,18 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
 
         return results;
     }
+
+
+    private NounInstance findPlayerByForgeName(String name) {
+        for (List<NounInstance> list : instancesByClass.values()) {
+            for (NounInstance ni : list) {
+                Object n = ni.getProperty("name");
+                if (n != null && n.toString().equals(name)) return ni;
+            }
+        }
+        return null;
+    }
+
 
     /**
      * Process a game event
@@ -184,14 +236,60 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
 
     @Override
     public Void visit(GameEventCardTapped event) {
-        // TODO: Get card ID and tapped state from event
-        // String cardId = event.getCard().getId();
-        // NounInstance card = getInstance(cardId);
-        // if (card != null) {
-        //     boolean tapped = event.isTapped();
-        //     card.setProperty("tapped", tapped);
-        //     LOGGER.fine("Card " + cardId + " tapped: " + tapped);
-        // }
+        try {
+            Card forgeCard = event.card;
+            if (forgeCard == null || cardFactory == null) return null;
+
+            // Locate or create the card’s NounInstance
+            NounInstance cardNI = cardFactory.getInstance(forgeCard);
+            if (cardNI == null) {
+                // Fallback: if not yet present in KB (rare mid-game), create it
+                cardNI = cardFactory.createCardInstance(forgeCard);
+            }
+            if (cardNI == null) return null;
+
+            // Sync the simple state so your KB stays truthful to Forge
+            boolean tappedNow;
+            try {
+                tappedNow = event.tapped;     // preferred if available
+            } catch (Throwable t) {
+                tappedNow = forgeCard.isTapped(); // fallback
+            }
+            cardNI.setProperty("tapped", tappedNow);
+
+            // Try to attribute the action to a player (controller at event time is usually correct)
+            Player forgeActor = forgeCard.getController();
+            NounInstance actorNI = null;
+            if (playerFactory != null && forgeActor != null) {
+                // If you seeded via PlayerInstanceFactory, you can keep a reverse map.
+                String id = playerFactory.resolvePlayerObjectId(forgeActor);
+                if (id != null) actorNI = getInstance(id);
+            }
+            if (actorNI == null && forgeActor != null) {
+                actorNI = findPlayerByForgeName(forgeActor.getName());
+            }
+            if (actorNI == null) {
+                // As a last resort, attribute to the permanent itself (useful for analytics over “what got tapped”).
+                actorNI = cardNI;
+            }
+
+            // Build/bind a *Tap* VerbInstance for analytics/AI memory
+            VerbDefinition tap = ForgeCommonVerbs.tapVerb();
+            VerbInstance vi = tap.bind(actorNI, List.of(cardNI), this);
+
+            // (Optional) Record your own structured event alongside storing the VerbInstance
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("verb", tap.name());
+            payload.put("actorId", actorNI.getObjectId());
+            payload.put("targetId", cardNI.getObjectId());
+            payload.put("tapped", tappedNow);
+            // If Forge ever exposes “asCost/effect/sourceSA”, attach here too.
+            recordEvent("Tap", payload);
+
+            verbHistory.add(vi);
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING, "visit(GameEventCardTapped) failed: " + ex.getMessage(), ex);
+        }
         return null;
     }
 
@@ -430,10 +528,7 @@ public class KnowledgeBase implements IGameEventVisitor<Void> {
     @Override
     public Void visit(GameEventDoorChanged event) { return null; }
 
-    public boolean hasInstance(String v) {
-        //TODO: Implement hasInstance
-        return false;
-    }
+    public void recordEvent(String type, Map<String,Object> payload) { /* your impl */ }
 
     // ========== Helper Methods ==========
 
